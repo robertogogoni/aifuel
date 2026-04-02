@@ -1,4 +1,8 @@
-# AIFuel
+# ⛽ AIFuel
+
+[![Release](https://img.shields.io/github/v/release/robertogogoni/aifuel?style=flat-square&color=a6e3a1)](https://github.com/robertogogoni/aifuel/releases)
+[![License](https://img.shields.io/github/license/robertogogoni/aifuel?style=flat-square&color=89b4fa)](LICENSE)
+[![Go](https://img.shields.io/badge/go-1.22+-00ADD8?style=flat-square&logo=go)](https://go.dev)
 
 Your AI usage, always visible. A real-time AI provider usage monitor for waybar.
 
@@ -135,13 +139,11 @@ The config file lives at `~/.config/aifuel/config.json`. All fields have sensibl
 ## CLI Commands
 
 ```bash
-aifuel                  # Show current usage (waybar JSON to stdout)
-aifuel install          # Interactive installer (scripts, config, systemd, chrome)
-aifuel auth <provider>  # Authenticate with a provider
-aifuel status           # Show status of all providers and data sources
-aifuel history          # Show usage history for the past 7 days
-aifuel dashboard        # Launch the TUI dashboard
-aifuel test             # Run the built-in test suite
+aifuel install          # Interactive TUI installer wizard
+aifuel check            # Run diagnostics (dependencies, credentials, network)
+aifuel status           # Quick one-line usage summary
+aifuel dashboard        # Launch the rich TUI dashboard
+aifuel uninstall        # Clean removal with config preservation option
 aifuel version          # Print version and build info
 ```
 

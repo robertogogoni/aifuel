@@ -1,0 +1,34 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-03-29
+
+### Added
+
+- Multi-provider support: Claude, Codex, Gemini, Antigravity
+- 5-phase data cascade: live feed, cache, cookies, OAuth, local JSONL
+- Waybar module with color-coded status (ok/warn/crit) and rich Pango tooltip
+- Analytics engine: depletion prediction, peak hour detection, binding limit resolution, per-prompt cost
+- TUI dashboard with sparklines, burn rate, 14-day history, per-model breakdown
+- Interactive settings panel via TUI (display mode, providers, notifications, theme)
+- Chrome extension for real-time usage data via native messaging
+- Background poller (systemd user service) for data freshness when Chrome is closed
+- Desktop notifications at configurable warning/critical thresholds
+- Cookie-based fetcher with auto-detection of Chrome variants (Canary, Stable, Chromium, Brave)
+- Go Charm CLI installer wizard with Catppuccin Mocha theme
+- CLI commands: install, check, status, dashboard, uninstall, version
+- Self-contained binary with embedded scripts (go:embed)
+- curl-pipe-bash bootstrap installer with GitHub Releases fallback to source build
+- GoReleaser config for cross-platform releases (linux/amd64, linux/arm64)
+- GitHub Actions release workflow
+- Comprehensive test suite (14 test groups covering cost accuracy, token counting, timezone handling, edge cases)
+- Usage history tracking with JSONL persistence and sparkline visualization
+- Clipboard export (wl-copy, xclip, xsel)
+- Light/dark theme auto-detection
+- Log rotation and structured logging
+
+[1.0.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.0.0
