@@ -1,0 +1,14 @@
+// Add this to your waybar config's "modules-right" (or left/center):
+// "custom/aifuel"
+{
+    "custom/aifuel": {
+        "exec": "~/.local/lib/aifuel/aifuel.sh",
+        "return-type": "json",
+        "interval": 30,
+        "tooltip": true,
+        "on-click": "~/.local/lib/aifuel/aifuel-tui.sh",
+        "on-click-right": "~/.local/lib/aifuel/dashboard.sh",
+        "format": "{}",
+        "escape": true
+    }
+}

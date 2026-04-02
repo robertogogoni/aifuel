@@ -1,0 +1,14 @@
+[Unit]
+Description=AIFuel Background Poller
+Documentation=https://github.com/robertogogoni/aifuel
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/lib/aifuel/background-poller.sh
+Restart=on-failure
+RestartSec=60
+Environment=HOME=%h
+
+[Install]
+WantedBy=default.target

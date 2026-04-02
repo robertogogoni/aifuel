@@ -1,0 +1,19 @@
+# Go binary
+aifuel
+*.exe
+
+# Build artifacts
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Cache
+*.cache

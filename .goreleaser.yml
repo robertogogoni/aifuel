@@ -1,0 +1,26 @@
+version: 2
+project_name: aifuel
+builds:
+  - id: aifuel
+    main: ./cmd/aifuel/
+    binary: aifuel-{{ .Os }}-{{ .Arch }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+archives:
+  - format: binary
+    name_template: "{{ .Binary }}"
+checksum:
+  name_template: checksums.txt
+release:
+  github:
+    owner: robertogogoni
+    name: aifuel
+  draft: false
+  prerelease: auto

@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "AIFuel Live Feed",
+  "version": "1.0.0",
+  "description": "Fetches AI provider usage data and sends it to the AIFuel native host for real-time waybar display.",
+  "permissions": [
+    "cookies",
+    "nativeMessaging",
+    "alarms",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "display_mode": "full",
+  "refresh_interval": 30,
+  "cache_ttl_seconds": 120,
+  "notifications_enabled": true,
+  "notify_warn_threshold": 80,
+  "notify_critical_threshold": 95,
+  "notify_cooldown_minutes": 15,
+  "history_enabled": true,
+  "history_retention_days": 7,
+  "theme": "auto",
+  "providers": {
+    "claude": { "enabled": true },
+    "codex": { "enabled": false },
+    "gemini": { "enabled": false },
+    "antigravity": { "enabled": false }
+  }
+}
