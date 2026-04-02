@@ -159,6 +159,16 @@ AIFuel uses a 5-phase data cascade:
 
 For the full architecture with diagrams, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## How aifuel Compares
+
+See the full [competitive comparison](docs/COMPARISON.md) against 28 tools including ccusage (12.3k stars), CodexBar (9.8k stars), and Claude Monitor (7.3k stars).
+
+**What makes aifuel unique:**
+- Only Go-native waybar module with a TUI dashboard
+- 5-phase data cascade (Chrome extension, CLI auth, cookies, polling, local JSONL)
+- Peak hour detection and depletion prediction in waybar
+- Interactive Charm TUI install wizard
+
 ## Dependencies
 
 ### Runtime
