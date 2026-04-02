@@ -95,7 +95,18 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, uninstallCmd, versionCmd)
+	// ── setup-chrome ────────────────────────────────────────────────
+	setupChromeCmd := &cobra.Command{
+		Use:   "setup-chrome",
+		Short: "Configure Chrome extension and native messaging host",
+		Long: "Detects the AIFuel Chrome extension, reads its ID, and configures\n" +
+			"the native messaging host so live usage data flows to waybar.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSetupChrome()
+		},
+	}
+
+	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, uninstallCmd, versionCmd, setupChromeCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Error.Render("Error: "+err.Error()))
@@ -239,4 +250,62 @@ func capitalize(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func runSetupChrome() error {
+	fuelIcon := lipgloss.NewStyle().Foreground(ui.Peach).Render("\u26fd")
+	fmt.Printf("%s %s\n\n", fuelIcon, lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve).Render("Chrome Extension Setup"))
+
+	// Step 1: Detect Chrome
+	profilePath, variant := installer.DetectChrome()
+	if variant == "" {
+		return fmt.Errorf("no Chrome variant detected. Install Chrome, Chromium, or Brave first")
+	}
+	fmt.Printf("  %s Chrome variant: %s\n", ui.Success.Render("✓"), variant)
+
+	// Step 2: Check extension is installed
+	configDir, _, _ := installer.GetInstallDirs()
+	extDir := filepath.Join(configDir, "chrome-extension")
+	if _, err := os.Stat(filepath.Join(extDir, "manifest.json")); os.IsNotExist(err) {
+		return fmt.Errorf("extension not found at %s. Run 'aifuel install' first", extDir)
+	}
+	fmt.Printf("  %s Extension files at %s\n", ui.Success.Render("✓"), extDir)
+
+	// Step 3: Auto-detect extension ID from Chrome preferences
+	extID := installer.DetectExtensionID(profilePath, "AIFuel Live Feed")
+	if extID == "" {
+		// Also try the legacy name
+		extID = installer.DetectExtensionID(profilePath, "AI Usage Live Feed")
+	}
+
+	if extID == "" {
+		fmt.Printf("\n  %s Extension not loaded in %s yet.\n\n", ui.Warning.Render("!"), variant)
+		fmt.Printf("  %s\n", lipgloss.NewStyle().Bold(true).Foreground(ui.Text).Render("To load the extension:"))
+		fmt.Printf("    1. Open %s and go to chrome://extensions\n", variant)
+		fmt.Printf("    2. Enable \"Developer mode\" (top right toggle)\n")
+		fmt.Printf("    3. Click \"Load unpacked\" and select:\n")
+		fmt.Printf("       %s\n", ui.Code.Render(extDir))
+		fmt.Printf("    4. Run this command again: %s\n\n", ui.Code.Render("aifuel setup-chrome"))
+		return nil
+	}
+
+	fmt.Printf("  %s Extension ID: %s\n", ui.Success.Render("✓"), extID)
+
+	// Step 4: Create/update native messaging host manifest
+	err := installer.SetupNativeHost(profilePath, extID)
+	if err != nil {
+		return fmt.Errorf("failed to set up native host: %w", err)
+	}
+	fmt.Printf("  %s Native messaging host configured\n", ui.Success.Render("✓"))
+
+	// Step 5: Verify
+	nativeDir := installer.GetNativeMessagingHostDir(profilePath)
+	manifestPath := filepath.Join(nativeDir, "com.aifuel.live_feed.json")
+	fmt.Printf("  %s Manifest: %s\n", ui.Success.Render("✓"), manifestPath)
+
+	fmt.Printf("\n  %s\n", lipgloss.NewStyle().Bold(true).Foreground(ui.Green).Render("Chrome extension is ready!"))
+	fmt.Printf("  Live usage data will flow to waybar within 2 minutes.\n")
+	fmt.Printf("  Make sure you're logged into %s\n\n", ui.Code.Render("claude.ai"))
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -204,6 +205,77 @@ func IsServiceActive(service string) bool {
 func IsServiceEnabled(service string) bool {
 	cmd := exec.Command("systemctl", "--user", "is-enabled", "--quiet", service)
 	return cmd.Run() == nil
+}
+
+// DetectExtensionID scans Chrome's Preferences file for an extension matching
+// the given name and returns its ID. For unpacked extensions, Chrome doesn't
+// store the manifest name in Preferences, so we also match by path or by
+// reading the manifest.json from the extension's directory on disk.
+func DetectExtensionID(chromeProfilePath string, extensionName string) string {
+	profiles := []string{"Default", "Profile 1", "Profile 2", "Profile 3"}
+
+	configDir, _, _ := GetInstallDirs()
+	aifuelExtDir := filepath.Join(configDir, "chrome-extension")
+
+	for _, profile := range profiles {
+		prefsPath := filepath.Join(chromeProfilePath, profile, "Preferences")
+		data, err := os.ReadFile(prefsPath)
+		if err != nil {
+			continue
+		}
+
+		var prefs map[string]interface{}
+		if err := json.Unmarshal(data, &prefs); err != nil {
+			continue
+		}
+
+		extensions, ok := prefs["extensions"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		settings, ok := extensions["settings"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		for extID, extData := range settings {
+			ext, ok := extData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Method 1: Match by manifest name (works for webstore extensions)
+			if manifest, ok := ext["manifest"].(map[string]interface{}); ok {
+				if name, ok := manifest["name"].(string); ok {
+					if strings.EqualFold(name, extensionName) {
+						return extID
+					}
+				}
+			}
+
+			// Method 2: Match by path (works for unpacked extensions)
+			if extPath, ok := ext["path"].(string); ok {
+				// Direct match: extension loaded from aifuel's directory
+				if extPath == aifuelExtDir || strings.HasSuffix(extPath, "/aifuel/chrome-extension") {
+					return extID
+				}
+				// Read the on-disk manifest to check the name
+				diskManifest := filepath.Join(extPath, "manifest.json")
+				if mData, err := os.ReadFile(diskManifest); err == nil {
+					var m map[string]interface{}
+					if json.Unmarshal(mData, &m) == nil {
+						if name, ok := m["name"].(string); ok {
+							if strings.EqualFold(name, extensionName) {
+								return extID
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 // GetVersion returns version info from git or embedded

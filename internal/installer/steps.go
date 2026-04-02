@@ -14,16 +14,27 @@ import (
 //go:embed all:scripts
 var embeddedScripts embed.FS
 
+//go:embed all:chrome-extension
+var embeddedChromeExt embed.FS
+
+// ProviderConfig holds per-provider settings
+type ProviderConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
 // Config holds the aifuel configuration
 type Config struct {
-	Providers        []string `json:"providers"`
-	DisplayMode      string   `json:"display_mode"`
-	Notifications    bool     `json:"notifications"`
-	CacheTTL         int      `json:"cache_ttl_seconds"`
-	ChromeExtension  bool     `json:"chrome_extension"`
-	ChromeVariant    string   `json:"chrome_variant,omitempty"`
-	ChromeProfile    string   `json:"chrome_profile,omitempty"`
-	Version          string   `json:"version"`
+	DisplayMode           string                    `json:"display_mode"`
+	RefreshInterval       int                       `json:"refresh_interval"`
+	CacheTTLSeconds       int                       `json:"cache_ttl_seconds"`
+	NotificationsEnabled  bool                      `json:"notifications_enabled"`
+	NotifyWarnThreshold   int                       `json:"notify_warn_threshold"`
+	NotifyCritThreshold   int                       `json:"notify_critical_threshold"`
+	NotifyCooldownMinutes int                       `json:"notify_cooldown_minutes"`
+	HistoryEnabled        bool                      `json:"history_enabled"`
+	HistoryRetentionDays  int                       `json:"history_retention_days"`
+	Theme                 string                    `json:"theme"`
+	Providers             map[string]ProviderConfig `json:"providers"`
 }
 
 // WizardSelections holds the user's wizard choices
@@ -90,15 +101,32 @@ func InstallScripts() error {
 func WriteConfig(sel WizardSelections) error {
 	configDir, _, _ := GetInstallDirs()
 
+	// Build providers map: all known providers, enabled based on selection
+	allProviders := []string{"claude", "codex", "gemini", "antigravity"}
+	providers := make(map[string]ProviderConfig, len(allProviders))
+	for _, p := range allProviders {
+		enabled := false
+		for _, sp := range sel.Providers {
+			if sp == p {
+				enabled = true
+				break
+			}
+		}
+		providers[p] = ProviderConfig{Enabled: enabled}
+	}
+
 	cfg := Config{
-		Providers:       sel.Providers,
-		DisplayMode:     sel.DisplayMode,
-		Notifications:   sel.Notifications,
-		CacheTTL:        sel.CacheTTL,
-		ChromeExtension: sel.ChromeExtension,
-		ChromeVariant:   sel.ChromeVariant,
-		ChromeProfile:   sel.ChromeProfile,
-		Version:         "1.0.0",
+		DisplayMode:           sel.DisplayMode,
+		RefreshInterval:       30,
+		CacheTTLSeconds:       sel.CacheTTL,
+		NotificationsEnabled:  sel.Notifications,
+		NotifyWarnThreshold:   80,
+		NotifyCritThreshold:   95,
+		NotifyCooldownMinutes: 15,
+		HistoryEnabled:        true,
+		HistoryRetentionDays:  7,
+		Theme:                 "auto",
+		Providers:             providers,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -177,7 +205,7 @@ WantedBy=timers.target
 	return nil
 }
 
-// InstallChromeExtension copies the Chrome extension files
+// InstallChromeExtension copies the Chrome extension files from the embedded chrome-extension/ directory
 func InstallChromeExtension() error {
 	configDir, _, _ := GetInstallDirs()
 	extDir := filepath.Join(configDir, "chrome-extension")
@@ -186,100 +214,32 @@ func InstallChromeExtension() error {
 		return fmt.Errorf("failed to create extension dir: %w", err)
 	}
 
-	manifest := `{
-  "manifest_version": 3,
-  "name": "aifuel - AI Usage Monitor",
-  "version": "1.0.0",
-  "description": "Monitors AI provider usage and feeds data to aifuel waybar module",
-  "permissions": [
-    "storage",
-    "nativeMessaging",
-    "cookies"
-  ],
-  "host_permissions": [
-    "https://console.anthropic.com/*",
-    "https://platform.openai.com/*",
-    "https://aistudio.google.com/*"
-  ],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "icons": {
-    "48": "icon48.png",
-    "128": "icon128.png"
-  }
-}`
-
-	backgroundJS := `// aifuel Chrome Extension - Background Service Worker
-// Monitors AI provider usage pages and sends data via native messaging
-
-const NATIVE_HOST = "com.aifuel.monitor";
-
-let port = null;
-
-function connectNativeHost() {
-  try {
-    port = chrome.runtime.connectNative(NATIVE_HOST);
-    port.onMessage.addListener((msg) => {
-      console.log("aifuel native:", msg);
-    });
-    port.onDisconnect.addListener(() => {
-      console.log("aifuel native host disconnected");
-      port = null;
-      // Retry after 30 seconds
-      setTimeout(connectNativeHost, 30000);
-    });
-  } catch (e) {
-    console.error("aifuel: failed to connect native host:", e);
-  }
-}
-
-function sendUsageData(data) {
-  if (port) {
-    port.postMessage(data);
-  }
-}
-
-// Listen for tab updates to detect AI provider pages
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete" || !tab.url) return;
-
-  const providers = [
-    { pattern: /console\.anthropic\.com/, name: "claude" },
-    { pattern: /platform\.openai\.com/, name: "codex" },
-    { pattern: /aistudio\.google\.com/, name: "gemini" },
-  ];
-
-  for (const provider of providers) {
-    if (provider.pattern.test(tab.url)) {
-      sendUsageData({
-        provider: provider.name,
-        url: tab.url,
-        timestamp: Date.now(),
-      });
-      break;
-    }
-  }
-});
-
-// Connect on startup
-connectNativeHost();
-console.log("aifuel extension loaded");
-`
-
-	if err := os.WriteFile(filepath.Join(extDir, "manifest.json"), []byte(manifest), 0644); err != nil {
-		return fmt.Errorf("failed to write manifest.json: %w", err)
+	entries, err := fs.ReadDir(embeddedChromeExt, "chrome-extension")
+	if err != nil {
+		return fmt.Errorf("failed to read embedded chrome-extension: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(extDir, "background.js"), []byte(backgroundJS), 0644); err != nil {
-		return fmt.Errorf("failed to write background.js: %w", err)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		data, err := fs.ReadFile(embeddedChromeExt, filepath.Join("chrome-extension", entry.Name()))
+		if err != nil {
+			return fmt.Errorf("failed to read embedded %s: %w", entry.Name(), err)
+		}
+
+		destPath := filepath.Join(extDir, entry.Name())
+		if err := os.WriteFile(destPath, data, 0644); err != nil {
+			return fmt.Errorf("failed to write %s: %w", destPath, err)
+		}
 	}
 
 	return nil
 }
 
 // SetupNativeHost creates the native messaging host manifest for Chrome
-func SetupNativeHost(chromeProfilePath string) error {
+func SetupNativeHost(chromeProfilePath string, chromeExtensionId string) error {
 	if chromeProfilePath == "" {
 		return fmt.Errorf("no Chrome profile path provided")
 	}
@@ -291,62 +251,25 @@ func SetupNativeHost(chromeProfilePath string) error {
 		return fmt.Errorf("failed to create NativeMessagingHosts dir: %w", err)
 	}
 
-	hostScript := filepath.Join(libDir, "aifuel-native-host.sh")
+	hostScriptPath := filepath.Join(libDir, "native-host.sh")
 
-	// Create the native host script
-	hostScriptContent := `#!/bin/bash
-# aifuel native messaging host
-# Receives messages from the Chrome extension and writes to cache
-
-CACHE_DIR="${HOME}/.cache/aifuel"
-mkdir -p "$CACHE_DIR"
-
-# Read message length (4 bytes, little-endian)
-read_message() {
-    local len
-    len=$(head -c 4 | od -An -td4 | tr -d ' ')
-    if [ -z "$len" ] || [ "$len" -le 0 ] 2>/dev/null; then
-        return 1
-    fi
-    head -c "$len"
-}
-
-# Write response (4-byte length prefix + JSON)
-write_message() {
-    local msg="$1"
-    local len=${#msg}
-    printf "$(printf '\\x%02x\\x%02x\\x%02x\\x%02x' \
-        $((len & 0xFF)) \
-        $(((len >> 8) & 0xFF)) \
-        $(((len >> 16) & 0xFF)) \
-        $(((len >> 24) & 0xFF)))"
-    printf '%s' "$msg"
-}
-
-while true; do
-    msg=$(read_message) || break
-    # Write received data to cache
-    echo "$msg" >> "$CACHE_DIR/chrome-feed.jsonl"
-    write_message '{"status":"ok"}'
-done
-`
-
-	if err := os.WriteFile(hostScript, []byte(hostScriptContent), 0755); err != nil {
-		return fmt.Errorf("failed to write native host script: %w", err)
+	// Determine allowed_origins
+	origin := "chrome-extension://YOUR_EXTENSION_ID_HERE/"
+	if chromeExtensionId != "" {
+		origin = fmt.Sprintf("chrome-extension://%s/", chromeExtensionId)
 	}
 
-	// Create the native messaging host manifest
 	hostManifest := fmt.Sprintf(`{
-  "name": "com.aifuel.monitor",
-  "description": "aifuel AI usage monitor native messaging host",
+  "name": "com.aifuel.live_feed",
+  "description": "aifuel AI usage live feed native messaging host",
   "path": "%s",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://aifuelmonitorextensionid/"
+    "%s"
   ]
-}`, hostScript)
+}`, hostScriptPath, origin)
 
-	manifestPath := filepath.Join(nativeDir, "com.aifuel.monitor.json")
+	manifestPath := filepath.Join(nativeDir, "com.aifuel.live_feed.json")
 	if err := os.WriteFile(manifestPath, []byte(hostManifest), 0644); err != nil {
 		return fmt.Errorf("failed to write native messaging host manifest: %w", err)
 	}
@@ -357,31 +280,19 @@ done
 // CreateWaybarSnippet generates the waybar module configuration
 func CreateWaybarSnippet(displayMode string) string {
 	_, _, libDir := GetInstallDirs()
-	scriptPath := filepath.Join(libDir, "aifuel-feed.sh")
-
-	var format string
-	switch displayMode {
-	case "icon":
-		format = "{icon}"
-	case "compact":
-		format = "{icon} {percentage}%"
-	default:
-		format = "{icon} {percentage}% {text}"
-	}
+	execPath := filepath.Join(libDir, "aifuel.sh")
+	onClickPath := filepath.Join(libDir, "aifuel-tui.sh")
+	onClickRightPath := filepath.Join(libDir, "dashboard.sh")
 
 	snippet := fmt.Sprintf(`"custom/aifuel": {
     "exec": "%s",
     "return-type": "json",
     "interval": 55,
-    "format": "%s",
-    "format-icons": {
-        "critical": "\u26fd",
-        "warning": "\u26fd",
-        "normal": "\u26fd",
-        "good": "\u26fd"
-    },
-    "tooltip": true
-}`, scriptPath, format)
+    "format": "{}",
+    "tooltip": true,
+    "on-click": "%s",
+    "on-click-right": "%s"
+}`, execPath, onClickPath, onClickRightPath)
 
 	return snippet
 }
@@ -449,7 +360,7 @@ func RemoveNativeHost() error {
 	}
 
 	nativeDir := GetNativeMessagingHostDir(profilePath)
-	manifestPath := filepath.Join(nativeDir, "com.aifuel.monitor.json")
+	manifestPath := filepath.Join(nativeDir, "com.aifuel.live_feed.json")
 
 	if _, err := os.Stat(manifestPath); err == nil {
 		return os.Remove(manifestPath)
