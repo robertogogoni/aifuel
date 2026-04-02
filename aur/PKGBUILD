@@ -1,0 +1,55 @@
+# Maintainer: Roberto Gogoni <robertogogoni@users.noreply.github.com>
+pkgname=aifuel-bin
+pkgver=1.1.0
+pkgrel=1
+pkgdesc='AI usage fuel gauge for waybar. Multi-provider rate limit monitoring with depletion prediction, burn rate tracking, and TUI dashboard.'
+arch=('x86_64' 'aarch64')
+url='https://github.com/robertogogoni/aifuel'
+license=('MIT')
+depends=('jq' 'curl' 'bash')
+optdepends=(
+    'waybar: status bar integration'
+    'gum: interactive TUI dashboard'
+    'libnotify: desktop notifications'
+    'wl-clipboard: clipboard export'
+)
+provides=('aifuel')
+conflicts=('aifuel' 'aifuel-git')
+source_x86_64=("${url}/releases/download/v${pkgver}/aifuel-linux-amd64")
+source_aarch64=("${url}/releases/download/v${pkgver}/aifuel-linux-arm64")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+    cd "$srcdir"
+
+    # Install binary
+    if [ "$CARCH" = "x86_64" ]; then
+        install -Dm755 "aifuel-linux-amd64" "$pkgdir/usr/bin/aifuel"
+    else
+        install -Dm755 "aifuel-linux-arm64" "$pkgdir/usr/bin/aifuel"
+    fi
+
+    # Generate and install shell completions
+    "$pkgdir/usr/bin/aifuel" completion bash > aifuel.bash 2>/dev/null || true
+    "$pkgdir/usr/bin/aifuel" completion zsh > _aifuel 2>/dev/null || true
+    "$pkgdir/usr/bin/aifuel" completion fish > aifuel.fish 2>/dev/null || true
+
+    [ -s aifuel.bash ] && install -Dm644 aifuel.bash "$pkgdir/usr/share/bash-completion/completions/aifuel"
+    [ -s _aifuel ] && install -Dm644 _aifuel "$pkgdir/usr/share/zsh/site-functions/_aifuel"
+    [ -s aifuel.fish ] && install -Dm644 aifuel.fish "$pkgdir/usr/share/fish/vendor_completions.d/aifuel.fish"
+}
+
+post_install() {
+    echo ""
+    echo "  ⛽ aifuel installed!"
+    echo ""
+    echo "  Run 'aifuel install' to set up scripts, config, and waybar integration."
+    echo "  Run 'aifuel setup-chrome' to configure the Chrome extension."
+    echo "  Run 'aifuel check' to verify your installation."
+    echo ""
+}
+
+post_upgrade() {
+    post_install
+}

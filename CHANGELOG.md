@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-29
+
+### Added
+
+- `aifuel statusline` command for Claude Code statusLine integration (compact: `5h:16% 7d:3% $21.59 359msg`)
+- `aifuel status --json` flag for machine-readable JSON output (pipe to jq, scripts, other tools)
+- `aifuel status` rewritten with real provider data (5h/7d utilization, cost, burn rate, messages, data source)
+- AUR PKGBUILD (`aifuel-bin`) for Arch Linux with auto-generated shell completions
+- Shell completion scripts for bash, zsh, and fish (via cobra)
+- README sections for statusLine integration, shell completions, and AUR install
+
 ## [1.0.1] - 2026-03-29
 
 ### Added
@@ -49,5 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Light/dark theme auto-detection
 - Log rotation and structured logging
 
+[1.1.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.1.0
 [1.0.1]: https://github.com/robertogogoni/aifuel/releases/tag/v1.0.1
 [1.0.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.0.0

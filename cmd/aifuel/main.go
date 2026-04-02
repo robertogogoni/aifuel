@@ -14,7 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "1.0.0"
+var version = "1.1.0"
+
+// Flags
+var jsonOutput bool
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -68,9 +71,21 @@ func main() {
 	statusCmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show quick one-line usage status",
-		Long:  "Display a formatted one-line summary of current AI usage across all configured providers.",
+		Long:  "Display a formatted one-line summary of current AI usage across all configured providers.\nUse --json for machine-readable output.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus()
+			return runStatus(jsonOutput)
+		},
+	}
+	statusCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON for piping to other tools")
+
+	// ── statusline ──────────────────────────────────────────────────────
+	statuslineCmd := &cobra.Command{
+		Use:   "statusline",
+		Short: "Output compact status for Claude Code statusLine",
+		Long: "Output a compact one-line string suitable for Claude Code's statusLine\n" +
+			"integration. Configure in Claude Code settings as the statusLine command.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStatusLine()
 		},
 	}
 
@@ -106,7 +121,7 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, uninstallCmd, versionCmd, setupChromeCmd)
+	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, statuslineCmd, uninstallCmd, versionCmd, setupChromeCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Error.Render("Error: "+err.Error()))
@@ -162,68 +177,97 @@ func findScript(name string) string {
 	return ""
 }
 
-// runStatus executes aifuel-claude.sh and formats the output as a styled one-liner
-func runStatus() error {
+// getProviderJSON runs aifuel-claude.sh and returns the parsed JSON
+func getProviderJSON() (map[string]interface{}, error) {
 	scriptPath := findScript("aifuel-claude.sh")
 	if scriptPath == "" {
-		return fmt.Errorf("aifuel-claude.sh not found. Is aifuel installed? Run 'aifuel install' first")
+		return nil, fmt.Errorf("aifuel-claude.sh not found. Is aifuel installed? Run 'aifuel install' first")
 	}
 
 	cmd := exec.Command("bash", scriptPath)
 	output, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("failed to run status script: %w", err)
+		return nil, fmt.Errorf("failed to run status script: %w", err)
 	}
 
 	raw := strings.TrimSpace(string(output))
 	if raw == "" {
-		fmt.Println(ui.Dim.Render("No usage data available."))
+		return nil, fmt.Errorf("no usage data available")
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &data); err != nil {
+		return nil, fmt.Errorf("failed to parse output: %w", err)
+	}
+	return data, nil
+}
+
+// runStatus displays a styled status line or raw JSON
+func runStatus(asJSON bool) error {
+	data, err := getProviderJSON()
+	if err != nil {
+		if asJSON {
+			fmt.Println("{}")
+		} else {
+			fmt.Println(ui.Dim.Render("No usage data available."))
+		}
 		return nil
 	}
 
-	// Try to parse as JSON for nice formatting
-	var data map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &data); err == nil {
-		return renderStatusJSON(data)
+	if asJSON {
+		out, _ := json.MarshalIndent(data, "", "  ")
+		fmt.Println(string(out))
+		return nil
 	}
 
-	// Fallback: just print raw output
-	fmt.Println(raw)
+	fiveHour := getFloat(data, "five_hour", 0)
+	sevenDay := getFloat(data, "seven_day", 0)
+	dailyCost := getFloat(data, "daily_cost", 0)
+	msgs := getFloat(data, "session_messages", 0)
+	source := getStr(data, "data_source", "?")
+	burnRate := getFloat(data, "burn_rate_per_hour", 0)
+
+	colorForPct := func(pct float64) lipgloss.Style {
+		switch {
+		case pct >= 85:
+			return lipgloss.NewStyle().Bold(true).Foreground(ui.Red)
+		case pct >= 60:
+			return lipgloss.NewStyle().Bold(true).Foreground(ui.Yellow)
+		default:
+			return lipgloss.NewStyle().Bold(true).Foreground(ui.Green)
+		}
+	}
+
+	fuel := lipgloss.NewStyle().Foreground(ui.Peach).Render("\u26fd")
+	label := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve).Render("Claude")
+	fh := colorForPct(fiveHour).Render(fmt.Sprintf("%0.f%%", fiveHour))
+	sd := colorForPct(sevenDay).Render(fmt.Sprintf("%0.f%%", sevenDay))
+	cost := lipgloss.NewStyle().Foreground(ui.Yellow).Render(fmt.Sprintf("$%.2f", dailyCost))
+	dim := ui.Dim
+
+	fmt.Printf("%s %s  5h: %s  7d: %s  %s  %s msgs  %s/hr  via %s\n",
+		fuel, label, fh, sd, cost,
+		dim.Render(fmt.Sprintf("%.0f", msgs)),
+		dim.Render(fmt.Sprintf("$%.2f", burnRate)),
+		dim.Render(source))
 	return nil
 }
 
-func renderStatusJSON(data map[string]interface{}) error {
-	provider := getStr(data, "provider", "unknown")
-	usagePct := getFloat(data, "usage_pct", -1)
-	resetDate := getStr(data, "reset_date", "")
-
-	// Choose color based on usage
-	var pctStyle lipgloss.Style
-	switch {
-	case usagePct >= 90:
-		pctStyle = lipgloss.NewStyle().Bold(true).Foreground(ui.Red)
-	case usagePct >= 70:
-		pctStyle = lipgloss.NewStyle().Bold(true).Foreground(ui.Yellow)
-	case usagePct >= 0:
-		pctStyle = lipgloss.NewStyle().Bold(true).Foreground(ui.Green)
-	default:
-		pctStyle = lipgloss.NewStyle().Foreground(ui.Overlay0)
+// runStatusLine outputs compact text for Claude Code's statusLine integration
+func runStatusLine() error {
+	data, err := getProviderJSON()
+	if err != nil {
+		fmt.Print("aifuel: no data")
+		return nil
 	}
 
-	fuelIcon := lipgloss.NewStyle().Foreground(ui.Peach).Render("\u26fd")
-	providerLabel := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve).Render(capitalize(provider))
+	fiveHour := getFloat(data, "five_hour", 0)
+	sevenDay := getFloat(data, "seven_day", 0)
+	dailyCost := getFloat(data, "daily_cost", 0)
+	msgs := getFloat(data, "session_messages", 0)
 
-	line := fuelIcon + " " + providerLabel
-
-	if usagePct >= 0 {
-		line += " " + pctStyle.Render(fmt.Sprintf("%.0f%%", usagePct)) + " used"
-	}
-
-	if resetDate != "" {
-		line += " " + ui.Dim.Render("(resets "+resetDate+")")
-	}
-
-	fmt.Println(line)
+	// Compact format for Claude Code statusLine: "5h:14% 7d:2% $12.49 326msg"
+	fmt.Printf("5h:%.0f%% 7d:%.0f%% $%.2f %.0fmsg", fiveHour, sevenDay, dailyCost, msgs)
 	return nil
 }
 

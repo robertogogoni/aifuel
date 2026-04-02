@@ -26,6 +26,13 @@ curl -fsSL https://raw.githubusercontent.com/robertogogoni/aifuel/master/install
 
 This detects your OS and architecture, downloads the latest release binary, and runs the interactive installer.
 
+## Arch Linux (AUR)
+
+```bash
+yay -S aifuel-bin
+aifuel install
+```
+
 ## Manual Install
 
 ### Prerequisites
@@ -141,10 +148,40 @@ The config file lives at `~/.config/aifuel/config.json`. All fields have sensibl
 ```bash
 aifuel install          # Interactive TUI installer wizard
 aifuel check            # Run diagnostics (dependencies, credentials, network)
-aifuel status           # Quick one-line usage summary
+aifuel status           # Styled one-line usage summary
+aifuel status --json    # Machine-readable JSON output (pipe to jq, scripts, etc.)
+aifuel statusline       # Compact output for Claude Code statusLine integration
 aifuel dashboard        # Launch the rich TUI dashboard
+aifuel setup-chrome     # Auto-detect and configure Chrome extension + native host
 aifuel uninstall        # Clean removal with config preservation option
 aifuel version          # Print version and build info
+```
+
+### Claude Code StatusLine Integration
+
+Add aifuel as your Claude Code status line provider:
+
+```json
+{
+  "statusLine": {
+    "command": "aifuel statusline"
+  }
+}
+```
+
+This shows compact usage data directly in your Claude Code terminal: `5h:16% 7d:3% $21.59 359msg`
+
+### Shell Completions
+
+```bash
+# Bash
+aifuel completion bash > ~/.local/share/bash-completion/completions/aifuel
+
+# Zsh
+aifuel completion zsh > ~/.local/share/zsh/site-functions/_aifuel
+
+# Fish
+aifuel completion fish > ~/.config/fish/completions/aifuel.fish
 ```
 
 ## Architecture
