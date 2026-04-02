@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
 CACHE_DIR="$AIFUEL_CACHE_DIR"
-LIVE_FEED="$CACHE_DIR/claude-usage-live.json"
+LIVE_FEED=$(resolve_live_feed)
 OVERLAY="$SCRIPT_DIR/aifuel-claude.sh"
 LOG="$AIFUEL_LOG_FILE"
 POLL_INTERVAL=120  # 2 minutes

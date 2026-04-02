@@ -126,6 +126,23 @@ cache_output() {
     printf '%s\n' "$content"
 }
 
+# ── Live feed resolution ─────────────────────────────────────────────────────
+
+# Find the Chrome extension live feed file. Checks aifuel's own cache first,
+# then falls back to the legacy ai-usage path (for users migrating from ai-usage
+# or running both systems). Returns the path to the freshest valid file, or empty.
+resolve_live_feed() {
+    local candidate
+    for candidate in \
+        "$AIFUEL_CACHE_DIR/claude-usage-live.json" \
+        "$HOME/.cache/ai-usage/cache/claude-usage-live.json"; do
+        if [ -f "$candidate" ] && [ -s "$candidate" ]; then
+            echo "$candidate"
+            return
+        fi
+    done
+}
+
 # ── Countdown formatting ─────────────────────────────────────────────────────
 
 # Format an ISO 8601 timestamp as a human-friendly countdown.

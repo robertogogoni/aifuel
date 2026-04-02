@@ -17,7 +17,7 @@ source "$SCRIPT_DIR/lib.sh"
 
 CCUSAGE_BIN=$(_find_ccusage)
 OVERLAY="$SCRIPT_DIR/aifuel-claude.sh"
-LIVE_FEED="$AIFUEL_CACHE_DIR/claude-usage-live.json"
+LIVE_FEED=$(resolve_live_feed)
 COOKIE_CACHE="$AIFUEL_CACHE_DIR/claude-usage-cookie.json"
 
 # ── Colors (Catppuccin Mocha) ─────────────────────────────────────────────────

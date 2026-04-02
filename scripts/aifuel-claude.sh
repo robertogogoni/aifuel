@@ -20,8 +20,9 @@ CACHE_FILE="$AIFUEL_CACHE_DIR/aifuel-cache-claude.json"
 CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
 LOCK_FILE="$AIFUEL_CACHE_DIR/.claude-updating"
 COOKIE_FETCHER="$SCRIPT_DIR/fetch-usage-via-cookies.sh"
-LIVE_FEED="$AIFUEL_CACHE_DIR/claude-usage-live.json"
 LIVE_FEED_MAX_AGE=300  # 5 min
+
+LIVE_FEED=$(resolve_live_feed)
 
 # ── Phase 0: LIVE FEED fast path (bypasses ALL caches) ───────────────────────
 # The Chrome extension writes fresh data every 2 min.
@@ -29,7 +30,7 @@ LIVE_FEED_MAX_AGE=300  # 5 min
 
 _ensure_dirs
 
-if [ -f "$LIVE_FEED" ]; then
+if [ -n "$LIVE_FEED" ] && [ -f "$LIVE_FEED" ]; then
     feed_age=$(( $(date +%s) - $(stat -c %Y "$LIVE_FEED") ))
     if [ "$feed_age" -lt "$LIVE_FEED_MAX_AGE" ]; then
         # Fast path: build output directly from live feed + local data

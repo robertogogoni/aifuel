@@ -18,7 +18,7 @@ source "$SCRIPT_DIR/lib.sh"
 CACHE_DIR="$AIFUEL_CACHE_DIR"
 COOKIE_JAR="$HOME/.cache/aifuel/cookie-jar.json"
 USAGE_CACHE="$CACHE_DIR/claude-usage-cookie.json"
-LIVE_FEED="$CACHE_DIR/claude-usage-live.json"
+LIVE_FEED=$(resolve_live_feed)
 LIVE_FEED_TTL=180  # 3 min (extension polls every 2 min)
 USAGE_CACHE_TTL=120
 COOKIE_JAR_MAX_AGE=43200  # 12 hours
