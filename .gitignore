@@ -1,5 +1,5 @@
-# Go binary
-aifuel
+# Go binary (anchored to repo root only)
+/aifuel
 *.exe
 
 # Build artifacts
