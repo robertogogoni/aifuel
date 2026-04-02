@@ -97,7 +97,9 @@ AIFuel supports four providers out of the box. Enable them in `~/.config/aifuel/
 | Claude | CLI auth, cookies, OAuth | Stable |
 | Codex | JSON-RPC app-server, OAuth | Experimental |
 | Gemini | OAuth via gemini CLI | Experimental |
+| Copilot | gh CLI, CodexBar | Experimental |
 | Antigravity | Local language server probe | Experimental |
+| Any (via CodexBar) | CodexBar CLI bridge | Experimental |
 
 For detailed setup instructions per provider, see [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
@@ -147,6 +149,9 @@ The config file lives at `~/.config/aifuel/config.json`. All fields have sensibl
 
 ```bash
 aifuel install          # Interactive TUI installer wizard
+aifuel auth             # Show auth status for all providers
+aifuel auth claude      # Authenticate with Claude (triggers claude auth login)
+aifuel auth copilot     # Authenticate with GitHub Copilot (triggers gh auth login)
 aifuel check            # Run diagnostics (dependencies, credentials, network)
 aifuel status           # Styled one-line usage summary
 aifuel status --json    # Machine-readable JSON output (pipe to jq, scripts, etc.)

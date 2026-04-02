@@ -168,6 +168,43 @@ else
     skip "language server not running — start Antigravity first"
 fi
 
+# ── Provider: Copilot ────────────────────────────────────────────────────────
+
+section "Provider: Copilot"
+
+if command -v gh &>/dev/null; then
+    ok "gh CLI found"
+    if gh auth status &>/dev/null 2>&1; then
+        ok "gh auth status OK"
+    else
+        fail "gh CLI not authenticated — run 'gh auth login'"
+    fi
+else
+    fail "gh CLI not found — install GitHub CLI"
+fi
+
+if command -v codexbar &>/dev/null; then
+    ok "codexbar available (fallback)"
+else
+    skip "codexbar not found — CodexBar fallback unavailable"
+fi
+
+# ── CodexBar (optional) ─────────────────────────────────────────────────────
+
+section "CodexBar (optional)"
+
+if command -v codexbar &>/dev/null; then
+    ok "codexbar binary found"
+    cb_test=$(codexbar --version 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$cb_test" ]; then
+        ok "codexbar responds ${DIM}($cb_test)${RESET}"
+    else
+        fail "codexbar found but not responding"
+    fi
+else
+    skip "codexbar not installed — universal provider bridge unavailable"
+fi
+
 # ── Network ───────────────────────────────────────────────────────────────────
 
 section "Network"

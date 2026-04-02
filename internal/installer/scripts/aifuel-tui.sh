@@ -28,7 +28,8 @@ ensure_config() {
     "claude": { "enabled": true },
     "codex": { "enabled": true },
     "gemini": { "enabled": true },
-    "antigravity": { "enabled": true }
+    "antigravity": { "enabled": true },
+    "copilot": { "enabled": false }
   }
 }
 EOF
@@ -136,16 +137,19 @@ fetch_all() {
     CODEX_JSON=""
     GEMINI_JSON=""
     ANTIGRAVITY_JSON=""
+    COPILOT_JSON=""
     CLAUDE_OK=false
     CODEX_OK=false
     GEMINI_OK=false
     ANTIGRAVITY_OK=false
+    COPILOT_OK=false
 
-    local claude_enabled codex_enabled gemini_enabled antigravity_enabled
+    local claude_enabled codex_enabled gemini_enabled antigravity_enabled copilot_enabled
     claude_enabled=$(jq -r 'if .providers.claude.enabled == null then true else .providers.claude.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
     codex_enabled=$(jq -r 'if .providers.codex.enabled == null then true else .providers.codex.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
     gemini_enabled=$(jq -r 'if .providers.gemini.enabled == null then true else .providers.gemini.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
     antigravity_enabled=$(jq -r 'if .providers.antigravity.enabled == null then true else .providers.antigravity.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
+    copilot_enabled=$(jq -r 'if .providers.copilot.enabled == null then false else .providers.copilot.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
 
     LIBEXEC_DIR=$(resolve_libexec_dir)
 
@@ -174,6 +178,13 @@ fetch_all() {
         ANTIGRAVITY_JSON=$("$LIBEXEC_DIR/aifuel-antigravity.sh" 2>/dev/null)
         if [ -n "$ANTIGRAVITY_JSON" ] && ! echo "$ANTIGRAVITY_JSON" | jq -e '.error' &>/dev/null; then
             ANTIGRAVITY_OK=true
+        fi
+    fi
+
+    if [ "$copilot_enabled" = "true" ]; then
+        COPILOT_JSON=$("$LIBEXEC_DIR/aifuel-copilot.sh" 2>/dev/null)
+        if [ -n "$COPILOT_JSON" ] && ! echo "$COPILOT_JSON" | jq -e '.error' &>/dev/null; then
+            COPILOT_OK=true
         fi
     fi
 }
@@ -332,11 +343,12 @@ show_dashboard() {
         "󰧑  AIFuel Dashboard"
     echo ""
 
-    local c_on x_on g_on a_on
+    local c_on x_on g_on a_on cp_on
     c_on=$(jq -r 'if .providers.claude.enabled == null then true else .providers.claude.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
     x_on=$(jq -r 'if .providers.codex.enabled == null then true else .providers.codex.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
     g_on=$(jq -r 'if .providers.gemini.enabled == null then true else .providers.gemini.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
     a_on=$(jq -r 'if .providers.antigravity.enabled == null then true else .providers.antigravity.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
+    cp_on=$(jq -r 'if .providers.copilot.enabled == null then false else .providers.copilot.enabled end' "$AIFUEL_CONFIG" 2>/dev/null)
 
     if $CLAUDE_OK; then
         render_provider "$CLAUDE_JSON" "Claude"
@@ -362,6 +374,12 @@ show_dashboard() {
         render_provider '{"error":"fetch failed"}' "Antigravity"
     fi
 
+    if $COPILOT_OK; then
+        render_provider "$COPILOT_JSON" "Copilot"
+    elif [ "$cp_on" = "true" ]; then
+        render_provider '{"error":"fetch failed"}' "Copilot"
+    fi
+
     printf '  %bUpdated %s%b\n\n' "$DIM" "$(date '+%H:%M:%S')" "$RESET"
 }
 
@@ -383,17 +401,19 @@ show_settings() {
         current_interval=$(jq -r '.refresh_interval // 60' "$AIFUEL_CONFIG")
         current_cache_ttl=$(jq -r '.cache_ttl_seconds // 55' "$AIFUEL_CONFIG")
 
-        local claude_on codex_on gemini_on antigravity_on
+        local claude_on codex_on gemini_on antigravity_on copilot_on
         claude_on=$(jq -r 'if .providers.claude.enabled == null then true else .providers.claude.enabled end' "$AIFUEL_CONFIG")
         codex_on=$(jq -r 'if .providers.codex.enabled == null then true else .providers.codex.enabled end' "$AIFUEL_CONFIG")
         gemini_on=$(jq -r 'if .providers.gemini.enabled == null then true else .providers.gemini.enabled end' "$AIFUEL_CONFIG")
         antigravity_on=$(jq -r 'if .providers.antigravity.enabled == null then true else .providers.antigravity.enabled end' "$AIFUEL_CONFIG")
+        copilot_on=$(jq -r 'if .providers.copilot.enabled == null then false else .providers.copilot.enabled end' "$AIFUEL_CONFIG")
 
-        local claude_mark codex_mark gemini_mark antigravity_mark
+        local claude_mark codex_mark gemini_mark antigravity_mark copilot_mark
         [ "$claude_on" = "true" ] && claude_mark="${GREEN}✓${RESET}" || claude_mark="${RED}✗${RESET}"
         [ "$codex_on" = "true" ] && codex_mark="${GREEN}✓${RESET}" || codex_mark="${RED}✗${RESET}"
         [ "$gemini_on" = "true" ] && gemini_mark="${GREEN}✓${RESET}" || gemini_mark="${RED}✗${RESET}"
         [ "$antigravity_on" = "true" ] && antigravity_mark="${GREEN}✓${RESET}" || antigravity_mark="${RED}✗${RESET}"
+        [ "$copilot_on" = "true" ] && copilot_mark="${GREEN}✓${RESET}" || copilot_mark="${RED}✗${RESET}"
 
         local current_theme
         current_theme=$(jq -r '.theme // "auto"' "$AIFUEL_CONFIG")
@@ -408,6 +428,7 @@ show_settings() {
         printf "  [%b] code${UNDERLINE}x${RESET}\n" "$codex_mark"
         printf "  [%b] ${UNDERLINE}g${RESET}emini\n" "$gemini_mark"
         printf "  [%b] ${UNDERLINE}a${RESET}ntigravity\n" "$antigravity_mark"
+        printf "  [%b] co${UNDERLINE}p${RESET}ilot\n" "$copilot_mark"
         echo ""
         local choice
         local notify_on
@@ -417,7 +438,7 @@ show_settings() {
         printf "  [%b] ${UNDERLINE}n${RESET}otifications\n" "$notify_mark"
         echo ""
 
-        choice=$(prompt_choice "d:Display mode" "i:Refresh interval" "t:Cache TTL" "e:Theme" "n:Toggle notifications" "c:Toggle Claude" "x:Toggle Codex" "g:Toggle Gemini" "a:Toggle Antigravity" "b:Back")
+        choice=$(prompt_choice "d:Display mode" "i:Refresh interval" "t:Cache TTL" "e:Theme" "n:Toggle notifications" "c:Toggle Claude" "x:Toggle Codex" "g:Toggle Gemini" "a:Toggle Antigravity" "p:Toggle Copilot" "b:Back")
 
         case "$choice" in
             d)
@@ -516,6 +537,14 @@ show_settings() {
                 atomic_write "$AIFUEL_CONFIG" "$updated"
                 refresh_waybar
                 ;;
+            p)
+                local new_val
+                [ "$copilot_on" = "true" ] && new_val=false || new_val=true
+                local updated
+                updated=$(jq --argjson v "$new_val" '.providers.copilot.enabled = $v' "$AIFUEL_CONFIG")
+                atomic_write "$AIFUEL_CONFIG" "$updated"
+                refresh_waybar
+                ;;
             b)
                 return
                 ;;
@@ -552,7 +581,7 @@ show_logs() {
 
 _show_log_provider_filter() {
     local provider
-    provider=$(gum choose "claude" "codex" "gemini" "antigravity" \
+    provider=$(gum choose "claude" "codex" "gemini" "antigravity" "copilot" \
         --cursor.foreground 39 \
         --item.foreground 255 \
         --header "Select provider:")
@@ -603,8 +632,8 @@ show_history() {
         "  Usage History (sparklines)"
     echo ""
 
-    local providers=("claude" "codex" "gemini" "antigravity")
-    local names=("Claude" "Codex" "Gemini" "Antigravity")
+    local providers=("claude" "codex" "gemini" "antigravity" "copilot")
+    local names=("Claude" "Codex" "Gemini" "Antigravity" "Copilot")
 
     for i in "${!providers[@]}"; do
         local p="${providers[$i]}"
@@ -687,6 +716,13 @@ copy_to_clipboard() {
         a7=$(_extract_pct "$ANTIGRAVITY_JSON" "seven_day")
         ap=$(echo "$ANTIGRAVITY_JSON" | jq -r '.plan // "?"' 2>/dev/null)
         report+=$'\n'"$(printf '%-14s 5h: %3d%%  7d: %3d%%  (%s)' 'Antigravity:' "$a5" "$a7" "$ap")"
+    fi
+    if $COPILOT_OK; then
+        local cp5 cp7 cpp
+        cp5=$(_extract_pct "$COPILOT_JSON" "five_hour")
+        cp7=$(_extract_pct "$COPILOT_JSON" "seven_day")
+        cpp=$(echo "$COPILOT_JSON" | jq -r '.plan // "?"' 2>/dev/null)
+        report+=$'\n'"$(printf '%-14s 5h: %3d%%  7d: %3d%%  (%s)' 'Copilot:' "$cp5" "$cp7" "$cpp")"
     fi
 
     echo "$report" | $clip_cmd 2>/dev/null

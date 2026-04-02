@@ -253,6 +253,33 @@ _find_ccusage() {
     done
 }
 
+# ── ccusage integration ──────────────────────────────────────────────────────
+
+# Get session breakdown from ccusage. Returns JSON array of sessions.
+ccusage_sessions() {
+    local bin
+    bin=$(_find_ccusage)
+    [ -z "$bin" ] && return
+    "$bin" session --json --offline --since "$(date +%Y%m%d)" 2>/dev/null
+}
+
+# Get daily breakdown for the last N days. Returns JSON with daily array.
+ccusage_daily() {
+    local days="${1:-14}"
+    local bin
+    bin=$(_find_ccusage)
+    [ -z "$bin" ] && return
+    "$bin" daily --json --offline --since "$(date -d "$days days ago" +%Y%m%d)" 2>/dev/null
+}
+
+# Get monthly totals. Returns JSON with monthly array.
+ccusage_monthly() {
+    local bin
+    bin=$(_find_ccusage)
+    [ -z "$bin" ] && return
+    "$bin" monthly --json --offline 2>/dev/null
+}
+
 # Find hack-browser-data binary. Checks PATH first, then common locations.
 _find_hbd() {
     command -v hack-browser-data 2>/dev/null || \

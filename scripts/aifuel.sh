@@ -56,11 +56,13 @@ claude_enabled=true
 codex_enabled=true
 gemini_enabled=true
 antigravity_enabled=true
+copilot_enabled=false
 if [ -f "$CONFIG_FILE" ]; then
     claude_enabled=$(jq -r 'if .providers.claude.enabled == null then true else .providers.claude.enabled end' "$CONFIG_FILE")
     codex_enabled=$(jq -r 'if .providers.codex.enabled == null then true else .providers.codex.enabled end' "$CONFIG_FILE")
     gemini_enabled=$(jq -r 'if .providers.gemini.enabled == null then true else .providers.gemini.enabled end' "$CONFIG_FILE")
     antigravity_enabled=$(jq -r 'if .providers.antigravity.enabled == null then true else .providers.antigravity.enabled end' "$CONFIG_FILE")
+    copilot_enabled=$(jq -r 'if .providers.copilot.enabled == null then false else .providers.copilot.enabled end' "$CONFIG_FILE")
 fi
 
 # ── Fetch provider data ──────────────────────────────────────────────────────
@@ -69,10 +71,12 @@ claude_json=""
 codex_json=""
 gemini_json=""
 antigravity_json=""
+copilot_json=""
 claude_ok=false
 codex_ok=false
 gemini_ok=false
 antigravity_ok=false
+copilot_ok=false
 
 fetch_provider() {
     local name="$1" script="$2"
@@ -97,6 +101,25 @@ fi
 if [ "$antigravity_enabled" = "true" ]; then
     antigravity_json=$(fetch_provider antigravity aifuel-antigravity.sh) && antigravity_ok=true
 fi
+if [ "$copilot_enabled" = "true" ]; then
+    copilot_json=$(fetch_provider copilot aifuel-copilot.sh) && copilot_ok=true
+fi
+
+# CodexBar fallback for failed providers
+if command -v codexbar &>/dev/null; then
+    if [ "$copilot_enabled" = "true" ] && ! $copilot_ok; then
+        copilot_json=$("$LIB_DIR/aifuel-codexbar.sh" copilot 2>/dev/null)
+        [ -n "$copilot_json" ] && ! echo "$copilot_json" | jq -e '.error' &>/dev/null && copilot_ok=true
+    fi
+    if [ "$codex_enabled" = "true" ] && ! $codex_ok; then
+        codex_json=$("$LIB_DIR/aifuel-codexbar.sh" codex 2>/dev/null)
+        [ -n "$codex_json" ] && ! echo "$codex_json" | jq -e '.error' &>/dev/null && codex_ok=true
+    fi
+    if [ "$gemini_enabled" = "true" ] && ! $gemini_ok; then
+        gemini_json=$("$LIB_DIR/aifuel-codexbar.sh" gemini 2>/dev/null)
+        [ -n "$gemini_json" ] && ! echo "$gemini_json" | jq -e '.error' &>/dev/null && gemini_ok=true
+    fi
+fi
 
 # Record history snapshots
 if [ "$HISTORY_ENABLED" = "true" ]; then
@@ -113,6 +136,7 @@ if [ "$HISTORY_ENABLED" = "true" ]; then
     _record "$codex_ok" "$codex_json" "codex"
     _record "$gemini_ok" "$gemini_json" "gemini"
     _record "$antigravity_ok" "$antigravity_json" "antigravity"
+    _record "$copilot_ok" "$copilot_json" "copilot"
 fi
 
 # ── Compute usage + extract all data ──────────────────────────────────────────
@@ -185,6 +209,18 @@ if $claude_ok; then
     [ "$c5" -gt "$max_pct" ] 2>/dev/null && max_pct=$c5
 fi
 
+if $copilot_ok; then
+    cp5=$(round_float "$(echo "$copilot_json" | jq -r '.five_hour // 0')")
+    cp7=$(round_float "$(echo "$copilot_json" | jq -r '.seven_day // 0')")
+    cp5r=$(echo "$copilot_json" | jq -r '.five_hour_reset // ""')
+    cp7r=$(echo "$copilot_json" | jq -r '.seven_day_reset // ""')
+    cp_plan=$(echo "$copilot_json" | jq -r '.plan // "unknown"')
+    cp_source=$(echo "$copilot_json" | jq -r '.data_source // "unknown"')
+
+    [ "$cp7" -gt "$max_pct" ] 2>/dev/null && max_pct=$cp7
+    [ "$cp5" -gt "$max_pct" ] 2>/dev/null && max_pct=$cp5
+fi
+
 # ── Notifications ────────────────────────────────────────────────────────────
 
 NOTIFY_STATE_FILE="$AIFUEL_CACHE_DIR/notify-state.json"
@@ -237,6 +273,13 @@ if [ "$NOTIFY_ENABLED" = "true" ] && command -v notify-send &>/dev/null; then
     $codex_ok && _send_notification "codex" "$x5" "$(format_countdown "$x5r")"
     $gemini_ok && _send_notification "gemini" "$g5" "$(format_countdown "$g5r")"
     $antigravity_ok && _send_notification "antigravity" "$a5" "$(format_countdown "$a5r")"
+    if $copilot_ok; then
+        local cp5
+        cp5=$(round_float "$(echo "$copilot_json" | jq -r '.five_hour // 0')")
+        local cp5r
+        cp5r=$(echo "$copilot_json" | jq -r '.five_hour_reset // ""')
+        _send_notification "copilot" "$cp5" "$(format_countdown "$cp5r")"
+    fi
 fi
 
 # ── CSS class ─────────────────────────────────────────────────────────────────
@@ -262,7 +305,7 @@ _is_light_theme && class="$class aifuel-light"
 
 # ── Build rich Pango tooltip ───────────────────────────────────────────────────
 
-if ! $claude_ok && ! $codex_ok && ! $gemini_ok && ! $antigravity_ok; then
+if ! $claude_ok && ! $codex_ok && ! $gemini_ok && ! $antigravity_ok && ! $copilot_ok; then
     jq -n -c '{"text":"󰧑 ?","tooltip":"AIFuel: No data available\nCheck credentials","class":"ai-warn"}'
     exit 0
 fi
@@ -401,6 +444,22 @@ if $claude_ok; then
     [ "$c_source" = "cache" ] && src_color="#f9e2af"
     [ "$c_source" = "local" ] && src_color="#f38ba8"
     tooltip+=$'\n'"<span foreground='${src_color}'>${src_icon}</span> <span foreground='${DIM}'>$(date '+%H:%M')  via ${c_source}  |  click for TUI</span>"
+fi
+
+# ── Copilot tooltip section ──────────────────────────────────────────────────
+
+if $copilot_ok; then
+    cp5_color=$(_pango_pct_color "$cp5")
+    cp7_color=$(_pango_pct_color "$cp7")
+    cp5_bar=$(_pango_bar "$cp5" 12)
+    cp7_bar=$(_pango_bar "$cp7" 12)
+
+    tooltip+=$'\n'"${SEP}"
+    tooltip+=$'\n'"<span foreground='${LABEL}'><b> Copilot</b></span>  <span foreground='${DIM}'>${cp_plan} via ${cp_source}</span>"
+    tooltip+=$'\n'"  <span foreground='${DIM}'>5-Hour</span>   ${cp5_bar}  <span foreground='${cp5_color}'><b>${cp5}%</b></span>  <span foreground='${DIM}'>resets</span> <span foreground='${VAL}'>$(format_countdown "$cp5r")</span>"
+    if [ "$cp7" -gt 0 ] 2>/dev/null; then
+        tooltip+=$'\n'"  <span foreground='${DIM}'>7-Day</span>    ${cp7_bar}  <span foreground='${cp7_color}'><b>${cp7}%</b></span>  <span foreground='${DIM}'>resets</span> <span foreground='${VAL}'>$(format_countdown "$cp7r")</span>"
+    fi
 fi
 
 # ── CSS class ─────────────────────────────────────────────────────────────────

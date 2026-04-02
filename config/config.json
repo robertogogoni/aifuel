@@ -13,6 +13,7 @@
     "claude": { "enabled": true },
     "codex": { "enabled": false },
     "gemini": { "enabled": false },
-    "antigravity": { "enabled": false }
+    "antigravity": { "enabled": false },
+    "copilot": { "enabled": false }
   }
 }

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-29
+
+### Added
+
+- `aifuel auth` command: shows authentication status for all providers (Claude, Codex, Gemini, Copilot, CodexBar) with a styled table
+- `aifuel auth <provider>`: triggers the official CLI auth flow interactively (claude auth login, codex auth login, gemini auth login, gh auth login, codexbar auth)
+- `aifuel-copilot.sh`: native GitHub Copilot provider using CodexBar CLI (primary) with gh API fallback for org-level metrics
+- `aifuel-codexbar.sh`: universal provider bridge that wraps the CodexBar CLI, enabling instant support for any provider CodexBar supports (Copilot, z.ai, Kimi, Kiro, Augment, Amp, and more)
+- ccusage deep integration: `ccusage_sessions()`, `ccusage_daily()`, `ccusage_monthly()` helper functions in lib.sh for richer analytics data
+- Copilot wired into main waybar module, TUI dashboard, settings panel, history tracking, and diagnostics
+- CodexBar fallback: if a native provider fetch fails and CodexBar is installed, automatically retry via CodexBar bridge
+- Copilot entry added to default config.json
+
 ## [1.1.0] - 2026-03-29
 
 ### Added
@@ -60,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Light/dark theme auto-detection
 - Log rotation and structured logging
 
+[1.2.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.2.0
 [1.1.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.1.0
 [1.0.1]: https://github.com/robertogogoni/aifuel/releases/tag/v1.0.1
 [1.0.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.0.0

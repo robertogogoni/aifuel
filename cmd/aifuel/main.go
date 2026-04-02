@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "1.1.0"
+var version = "1.2.0"
 
 // Flags
 var jsonOutput bool
@@ -121,7 +121,22 @@ func main() {
 		},
 	}
 
-	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, statuslineCmd, uninstallCmd, versionCmd, setupChromeCmd)
+	// ── auth ─────────────────────────────────────────────────────────────
+	authCmd := &cobra.Command{
+		Use:   "auth [provider]",
+		Short: "Authenticate with AI providers",
+		Long: "Check authentication status for all providers, or authenticate with a specific one.\n\n" +
+			"Providers: claude, codex, gemini, copilot, codexbar\n\n" +
+			"Examples:\n  aifuel auth           # Show auth status for all providers\n" +
+			"  aifuel auth claude   # Authenticate with Claude\n" +
+			"  aifuel auth copilot  # Authenticate with GitHub Copilot",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAuth(args)
+		},
+		ValidArgs: []string{"claude", "codex", "gemini", "copilot", "codexbar"},
+	}
+
+	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, statuslineCmd, uninstallCmd, versionCmd, setupChromeCmd, authCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Error.Render("Error: "+err.Error()))
@@ -351,5 +366,118 @@ func runSetupChrome() error {
 	fmt.Printf("  Live usage data will flow to waybar within 2 minutes.\n")
 	fmt.Printf("  Make sure you're logged into %s\n\n", ui.Code.Render("claude.ai"))
 
+	return nil
+}
+
+// runAuth handles the auth command logic
+func runAuth(args []string) error {
+	fuelIcon := lipgloss.NewStyle().Foreground(ui.Peach).Render("\u26fd")
+
+	if len(args) == 0 {
+		// ── Status table for all providers ────────────────────────────────
+		fmt.Printf("\n%s %s\n\n",
+			fuelIcon,
+			lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve).Render("Authentication Status"))
+
+		results := installer.AuthAll()
+
+		// Provider display metadata
+		type providerMeta struct {
+			icon string
+			name string
+		}
+		meta := map[string]providerMeta{
+			"claude":   {icon: "\U0001f9e0", name: "Claude"},
+			"codex":    {icon: "\U0001f4bb", name: "Codex"},
+			"gemini":   {icon: "\u2728", name: "Gemini"},
+			"copilot":  {icon: "\U0001f419", name: "Copilot"},
+			"codexbar": {icon: "\U0001f4ca", name: "CodexBar"},
+		}
+
+		nameStyle := lipgloss.NewStyle().Bold(true).Foreground(ui.Text).Width(12)
+		cliStyle := lipgloss.NewStyle().Foreground(ui.Subtext0).Width(12)
+		pathStyle := lipgloss.NewStyle().Foreground(ui.Overlay0)
+
+		// Header
+		headerName := lipgloss.NewStyle().Bold(true).Foreground(ui.Blue).Width(14).Render("Provider")
+		headerCLI := lipgloss.NewStyle().Bold(true).Foreground(ui.Blue).Width(12).Render("CLI")
+		headerInstall := lipgloss.NewStyle().Bold(true).Foreground(ui.Blue).Width(12).Render("Installed")
+		headerAuth := lipgloss.NewStyle().Bold(true).Foreground(ui.Blue).Width(12).Render("Authed")
+		headerCred := lipgloss.NewStyle().Bold(true).Foreground(ui.Blue).Render("Credentials")
+		fmt.Printf("  %s%s%s%s%s\n", headerName, headerCLI, headerInstall, headerAuth, headerCred)
+		fmt.Printf("  %s\n", lipgloss.NewStyle().Foreground(ui.Surface0).Render(strings.Repeat("\u2500", 72)))
+
+		for _, r := range results {
+			m := meta[r.Provider]
+
+			installMark := ui.CrossMark
+			if r.Installed {
+				installMark = ui.CheckMark
+			}
+
+			authMark := ui.CrossMark
+			if r.NowAuthed {
+				authMark = ui.CheckMark
+			}
+
+			credPath := installer.CredentialPath(r.Provider)
+			if !r.Installed {
+				credPath = "CLI not installed"
+			} else if !r.NowAuthed {
+				credPath = "not authenticated"
+			}
+
+			fmt.Printf("  %s %s%s%s    %s    %s\n",
+				m.icon,
+				nameStyle.Render(m.name),
+				cliStyle.Render(r.CliTool),
+				installMark,
+				authMark,
+				pathStyle.Render(credPath),
+			)
+		}
+
+		fmt.Printf("\n  %s\n\n",
+			ui.Dim.Render("Run 'aifuel auth <provider>' to authenticate with a specific provider."))
+		return nil
+	}
+
+	// ── Single provider auth flow ────────────────────────────────────────
+	provider := strings.ToLower(args[0])
+	fmt.Printf("\n%s %s %s\n\n",
+		fuelIcon,
+		lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve).Render("Authenticating:"),
+		lipgloss.NewStyle().Bold(true).Foreground(ui.Peach).Render(capitalize(provider)))
+
+	result := installer.RunAuthFlow(provider)
+
+	if result.Error != nil && !result.Installed {
+		fmt.Printf("  %s %s\n\n", ui.CrossMark, ui.Error.Render(result.Error.Error()))
+		return nil
+	}
+
+	if result.WasAuthed {
+		fmt.Printf("  %s Already authenticated with %s\n",
+			ui.CheckMark,
+			lipgloss.NewStyle().Bold(true).Foreground(ui.Text).Render(capitalize(provider)))
+		credPath := installer.CredentialPath(provider)
+		fmt.Printf("  %s Credentials: %s\n\n", ui.Dim.Render("\u2022"), ui.Dim.Render(credPath))
+		return nil
+	}
+
+	if result.NowAuthed {
+		fmt.Printf("\n  %s %s\n",
+			ui.CheckMark,
+			lipgloss.NewStyle().Bold(true).Foreground(ui.Green).Render("Authentication successful!"))
+		credPath := installer.CredentialPath(provider)
+		fmt.Printf("  %s Credentials: %s\n\n", ui.Dim.Render("\u2022"), ui.Dim.Render(credPath))
+		return nil
+	}
+
+	if result.Error != nil {
+		fmt.Printf("\n  %s %s\n\n", ui.CrossMark, ui.Error.Render(result.Error.Error()))
+	} else {
+		fmt.Printf("\n  %s %s\n\n", ui.CrossMark, ui.Error.Render("Authentication was not completed."))
+	}
 	return nil
 }
