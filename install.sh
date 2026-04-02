@@ -1,6 +1,6 @@
 #!/bin/bash
 # AIFuel Installer Bootstrap
-# Usage: curl -fsSL https://raw.githubusercontent.com/robertogogoni/aifuel/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/robertogogoni/aifuel/master/install.sh | bash
 set -euo pipefail
 
 REPO="robertogogoni/aifuel"

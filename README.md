@@ -21,7 +21,7 @@ Your AI usage, always visible. A real-time AI provider usage monitor for waybar.
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/robertogogoni/aifuel/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/robertogogoni/aifuel/master/install.sh | bash
 ```
 
 This detects your OS and architecture, downloads the latest release binary, and runs the interactive installer.

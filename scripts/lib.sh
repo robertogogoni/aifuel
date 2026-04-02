@@ -81,7 +81,7 @@ check_cache() {
     local ttl="${2:-${AIFUEL_CACHE_TTL:-}}"
     [ -z "$ttl" ] && ttl=$(get_config_value "cache_ttl_seconds" "$CACHE_MAX_AGE_DEFAULT")
     _ensure_dirs
-    if [ -f "$cache_file" ]; then
+    if [ -f "$cache_file" ] && [ -s "$cache_file" ]; then
         local cache_age
         cache_age=$(( $(date +%s) - $(stat -c %Y "$cache_file") ))
         if [ "$cache_age" -lt "$ttl" ]; then
