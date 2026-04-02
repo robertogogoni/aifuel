@@ -36,16 +36,30 @@ if [ -n "$LIVE_FEED" ] && [ -f "$LIVE_FEED" ]; then
         # Fast path: build output directly from live feed + local data
         # Skip all caches, locks, and network calls.
         _quick_session() {
-            local f
-            f=$(find "$HOME/.claude/projects" -name "*.jsonl" -type f -printf '%T@ %p\n' 2>/dev/null \
-                | sort -rn | head -1 | cut -d' ' -f2-)
-            [ -z "$f" ] && return
-            jq -n '[inputs | select(.message.usage != null) | .message.usage] | {
-                total_output_tokens: (map(.output_tokens // 0) | add // 0),
-                total_cache_read_tokens: (map(.cache_read_input_tokens // 0) | add // 0),
-                total_cache_creation_tokens: (map(.cache_creation_input_tokens // 0) | add // 0),
-                session_messages: length
-            }' "$f" 2>/dev/null
+            # Aggregate ALL today's sessions (not just the most recent)
+            local files
+            files=$(find "$HOME/.claude/projects" -name "*.jsonl" -type f -newermt "$(date +%Y-%m-%d)" 2>/dev/null)
+            [ -z "$files" ] && return
+            local total_out=0 total_cread=0 total_ccreate=0 total_msgs=0 total_sessions=0
+            while IFS= read -r f; do
+                [ -f "$f" ] || continue
+                local stats
+                stats=$(jq -n '[inputs | select(.message.usage != null) | .message.usage] | {
+                    o: (map(.output_tokens // 0) | add // 0),
+                    cr: (map(.cache_read_input_tokens // 0) | add // 0),
+                    cc: (map(.cache_creation_input_tokens // 0) | add // 0),
+                    m: length
+                }' "$f" 2>/dev/null) || continue
+                total_out=$(( total_out + $(echo "$stats" | jq '.o') ))
+                total_cread=$(( total_cread + $(echo "$stats" | jq '.cr') ))
+                total_ccreate=$(( total_ccreate + $(echo "$stats" | jq '.cc') ))
+                total_msgs=$(( total_msgs + $(echo "$stats" | jq '.m') ))
+                total_sessions=$(( total_sessions + 1 ))
+            done <<< "$files"
+            jq -n -c --argjson o "$total_out" --argjson cr "$total_cread" \
+                --argjson cc "$total_ccreate" --argjson m "$total_msgs" --argjson s "$total_sessions" \
+                '{total_output_tokens:$o, total_cache_read_tokens:$cr,
+                  total_cache_creation_tokens:$cc, session_messages:$m, total_sessions:$s}'
         }
         _quick_cost() {
             # Use a short-lived cost cache (30s) to avoid 1.7s ccusage call on hover
@@ -146,18 +160,30 @@ trap 'rm -f "$LOCK_FILE" 2>/dev/null' EXIT
 # ── Phase 2: Gather local data (always available) ────────────────────────────
 
 _get_session_data() {
-    local session_file
-    session_file=$(find "$HOME/.claude/projects" -name "*.jsonl" -type f -printf '%T@ %p\n' 2>/dev/null \
-        | sort -rn | head -1 | cut -d' ' -f2-)
-    [ -z "$session_file" ] || [ ! -f "$session_file" ] && return
-    jq -n '
-        [inputs | select(.message.usage != null) | .message.usage]
-        | {
-            total_output_tokens:         (map(.output_tokens // 0) | add // 0),
-            total_cache_read_tokens:     (map(.cache_read_input_tokens // 0) | add // 0),
-            total_cache_creation_tokens: (map(.cache_creation_input_tokens // 0) | add // 0),
-            session_messages:            length
-        }' "$session_file" 2>/dev/null
+    # Aggregate ALL today's sessions
+    local files
+    files=$(find "$HOME/.claude/projects" -name "*.jsonl" -type f -newermt "$(date +%Y-%m-%d)" 2>/dev/null)
+    [ -z "$files" ] && return
+    local total_out=0 total_cread=0 total_ccreate=0 total_msgs=0 total_sessions=0
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        local stats
+        stats=$(jq -n '[inputs | select(.message.usage != null) | .message.usage] | {
+            o: (map(.output_tokens // 0) | add // 0),
+            cr: (map(.cache_read_input_tokens // 0) | add // 0),
+            cc: (map(.cache_creation_input_tokens // 0) | add // 0),
+            m: length
+        }' "$f" 2>/dev/null) || continue
+        total_out=$(( total_out + $(echo "$stats" | jq '.o') ))
+        total_cread=$(( total_cread + $(echo "$stats" | jq '.cr') ))
+        total_ccreate=$(( total_ccreate + $(echo "$stats" | jq '.cc') ))
+        total_msgs=$(( total_msgs + $(echo "$stats" | jq '.m') ))
+        total_sessions=$(( total_sessions + 1 ))
+    done <<< "$files"
+    jq -n -c --argjson o "$total_out" --argjson cr "$total_cread" \
+        --argjson cc "$total_ccreate" --argjson m "$total_msgs" --argjson s "$total_sessions" \
+        '{total_output_tokens:$o, total_cache_read_tokens:$cr,
+          total_cache_creation_tokens:$cc, session_messages:$m, total_sessions:$s}'
 }
 
 _get_daily_cost() {
