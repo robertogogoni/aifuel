@@ -102,7 +102,7 @@ func WriteConfig(sel WizardSelections) error {
 	configDir, _, _ := GetInstallDirs()
 
 	// Build providers map: all known providers, enabled based on selection
-	allProviders := []string{"claude", "codex", "gemini", "antigravity"}
+	allProviders := []string{"claude", "codex", "gemini", "antigravity", "copilot"}
 	providers := make(map[string]ProviderConfig, len(allProviders))
 	for _, p := range allProviders {
 		enabled := false

@@ -47,14 +47,45 @@ aifuel auth claude
 
 This opens a browser window for the OAuth consent flow. The refresh token is stored securely in your system keyring (via `keyctl` on Linux).
 
-### Data Fields
+### API Endpoints
 
-Claude provides:
+**Usage data** (polled every 2 minutes via Chrome extension, or on-demand via cookies/OAuth):
+```
+GET https://claude.ai/api/organizations/{orgId}/usage
+```
 
-- `five_hour.utilization`: percentage of 5-hour rate limit consumed (0 to 100)
-- `seven_day.utilization`: percentage of 7-day rate limit consumed (0 to 100)
-- Per-model breakdowns (when available)
-- Reset timestamps for each window
+**Account metadata** (polled every 30 minutes via Chrome extension, cached 1 hour):
+```
+GET https://claude.ai/api/organizations/{orgId}
+```
+
+### Data Fields (v1.3.0)
+
+From the usage endpoint:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `five_hour.utilization` | float | 5-hour rate limit consumed (0 to 100) |
+| `five_hour.resets_at` | ISO 8601 | When the 5-hour window resets |
+| `seven_day.utilization` | float | 7-day rate limit consumed (0 to 100) |
+| `seven_day.resets_at` | ISO 8601 | When the 7-day window resets |
+| `seven_day_sonnet.utilization` | float | Sonnet-specific 7-day limit |
+| `seven_day_opus.utilization` | float/null | Opus-specific 7-day limit (activates when Anthropic enables it) |
+| `seven_day_oauth_apps.utilization` | float/null | OAuth app-specific limit |
+| `seven_day_cowork.utilization` | float/null | Team/collaboration limit |
+| `extra_usage.is_enabled` | bool | Whether extra usage credits are active |
+| `extra_usage.used_credits` | float | Credits consumed this billing cycle |
+| `extra_usage.monthly_limit` | float/null | Credit cap (null = unlimited) |
+| `extra_usage.utilization` | float/null | Credit usage as percentage |
+
+From the account endpoint:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `rate_limit_tier` | string | Real rate tier (e.g., `default_claude_max_20x`) |
+| `billing_type` | string | Subscription type (`stripe_subscription`, `prepaid`) |
+| `capabilities` | array | Account capabilities (e.g., `["chat", "claude_max"]`) |
+| `claude_ai_bootstrap_models_config` | array | Available models with active/inactive/overflow flags |
 
 ## Codex
 

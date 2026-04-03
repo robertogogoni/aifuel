@@ -4,7 +4,7 @@
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-AIFUEL_VERSION="0.1.0"
+AIFUEL_VERSION="1.3.0"
 AIFUEL_CONFIG="$HOME/.config/aifuel/config.json"
 AIFUEL_CACHE_DIR="$HOME/.cache/aifuel/cache"
 AIFUEL_LOG_DIR="$HOME/.cache/aifuel"

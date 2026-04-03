@@ -1,49 +1,80 @@
-# ⛽ AIFuel
+<p align="center">
+  <br>
+  <img src="https://img.shields.io/badge/%E2%9B%BD-aifuel-fab387?style=for-the-badge&labelColor=1e1e2e" alt="aifuel" />
+  <br><br>
+  <strong>Real-time AI provider usage monitor for waybar</strong>
+  <br>
+  <sub>Know exactly how much fuel is left in your Claude, Codex, Gemini, and Copilot tanks.</sub>
+  <br><br>
+  <a href="https://github.com/robertogogoni/aifuel/releases"><img src="https://img.shields.io/github/v/release/robertogogoni/aifuel?style=flat-square&color=a6e3a1&label=release" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/robertogogoni/aifuel?style=flat-square&color=89b4fa" alt="License"></a>
+  <a href="https://go.dev"><img src="https://img.shields.io/badge/go-1.24+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go"></a>
+  <a href="https://github.com/robertogogoni/aifuel/stargazers"><img src="https://img.shields.io/github/stars/robertogogoni/aifuel?style=flat-square&color=f9e2af" alt="Stars"></a>
+  <a href="https://aur.archlinux.org/packages/aifuel-bin"><img src="https://img.shields.io/badge/AUR-aifuel--bin-1793d1?style=flat-square&logo=archlinux&logoColor=white" alt="AUR"></a>
+</p>
 
-[![Release](https://img.shields.io/github/v/release/robertogogoni/aifuel?style=flat-square&color=a6e3a1)](https://github.com/robertogogoni/aifuel/releases)
-[![License](https://img.shields.io/github/license/robertogogoni/aifuel?style=flat-square&color=89b4fa)](LICENSE)
-[![Go](https://img.shields.io/badge/go-1.22+-00ADD8?style=flat-square&logo=go)](https://go.dev)
+---
 
-Your AI usage, always visible. A real-time AI provider usage monitor for waybar.
+aifuel is a Go CLI that monitors your AI provider usage and renders it as a color-coded fuel gauge in [waybar](https://github.com/Alexays/Waybar). It tracks Claude, Codex, Gemini, Copilot, Antigravity, and any [CodexBar](https://github.com/nicepkg/codexbar)-supported provider through a 5-phase data cascade that never loses signal. The TUI, CLI, and notifications all use the [Catppuccin Mocha](https://catppuccin.com/) palette.
+
+**v1.3.0** introduces a pixel-art fuel pump logo, Catppuccin-themed `--help`, a rich `status --full` dashboard with progress bars, an interactive `config` editor, shell completions, and expanded API coverage including Opus rate limits, OAuth app quotas, and extra usage credits.
 
 ## Features
 
-- **Live usage tracking** for Claude, Codex, Gemini, and Antigravity in your waybar
-- **Smart analytics** including depletion prediction, peak hours detection, and binding limit resolution
-- **Multi-source data cascade** combining Chrome extension cookies, CLI auth, and background polling for maximum reliability
-- **TUI dashboard** with full-screen terminal interface built on Bubble Tea
-- **Desktop notifications** at configurable warning and critical thresholds
+**Live Fuel Gauge** :fuelpump: Track 5-hour and 7-day rate limits, Sonnet and Opus quotas, OAuth app limits, and extra usage credits directly in your status bar.
 
-## Screenshots
+**5-Phase Data Cascade** :zap: Chrome extension, TTL cache, cookie fetch, OAuth fallback, and local JSONL, in that order. If one source drops, the next takes over transparently.
 
-> Screenshots and GIFs coming soon. The waybar module displays a compact fuel gauge icon with color-coded status (green/yellow/red) and a rich tooltip showing per-provider breakdowns, depletion estimates, and peak hour status.
+**Multi-Provider** :globe_with_meridians: Claude (stable), Codex (stable), Copilot (stable), Gemini (experimental), Antigravity (experimental), plus any provider via the CodexBar bridge.
+
+**Rich TUI Dashboard** :bar_chart: Full-screen terminal interface built on [Bubble Tea](https://github.com/charmbracelet/bubbletea) with sparklines, burn rate, 14-day history, and per-model breakdown.
+
+**Smart Analytics** :brain: Depletion prediction, peak hour detection, binding limit resolution, per-prompt cost tracking, and session aggregation across concurrent sessions.
+
+**Desktop Notifications** :bell: Configurable warnings at 80% and critical alerts at 95% with cooldown to prevent notification spam.
+
+**Catppuccin Everywhere** :art: Mocha palette throughout: waybar CSS classes, TUI chrome, CLI output, pixel-art logo, and even `--help` text.
+
+**Claude Code Integration** :link: Compact statusLine output shows `5h:16% 7d:3% $21.59 359msg` right in your terminal.
+
+## What's New in v1.3.0
+
+| Feature | Description |
+|---------|-------------|
+| **Pixel-art fuel pump** | 8-line ASCII art with Catppuccin warm-to-shadow gradient, displayed on `aifuel version` |
+| **Themed Cobra help** | All `--help` output uses Catppuccin colors (Mauve headers, Peach commands, dimmed hints) |
+| **`aifuel status --full`** | Rich dashboard with progress bars, model breakdown, extra usage credits, and account info |
+| **`aifuel config`** | Interactive [huh](https://github.com/charmbracelet/huh) form editor for live config changes |
+| **`aifuel completion`** | Native shell completions for bash, zsh, and fish via Cobra |
+| **5 new API fields** | `seven_day_opus`, `seven_day_oauth_apps`, `seven_day_cowork`, `extra_usage_monthly_limit`, `extra_usage_utilization` |
+| **Account endpoint** | `/api/organizations/{org}` provides real `rate_limit_tier`, `billing_type`, capabilities, and available models |
+| **Chrome org fetch** | `background.js` now fetches org metadata every 30 minutes alongside usage data |
 
 ## Quick Install
+
+### One-liner (recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/robertogogoni/aifuel/master/install.sh | bash
 ```
 
-This detects your OS and architecture, downloads the latest release binary, and runs the interactive installer.
+Detects your OS and architecture, downloads the latest release binary, and launches the interactive TUI installer.
 
-## Arch Linux (AUR)
+### AUR (Arch Linux)
 
 ```bash
 yay -S aifuel-bin
 aifuel install
 ```
 
-## Manual Install
+### Go install
 
-### Prerequisites
+```bash
+go install github.com/robertogogoni/aifuel/cmd/aifuel@latest
+aifuel install
+```
 
-- Go 1.22+ (for building from source)
-- `jq` (for shell scripts)
-- `curl` (for API calls)
-- waybar (for the status bar module)
-- A Nerd Font (recommended: JetBrainsMono Nerd Font)
-
-### Build from Source
+### Build from source
 
 ```bash
 git clone https://github.com/robertogogoni/aifuel.git
@@ -52,20 +83,99 @@ go build -o ~/.local/bin/aifuel ./cmd/aifuel/
 aifuel install
 ```
 
-The `aifuel install` command sets up:
+## Getting Started
 
-- Runtime scripts in `~/.local/lib/aifuel/`
-- Default config in `~/.config/aifuel/config.json`
-- Systemd user service for background polling
-- Native messaging host manifest for the Chrome extension
+**1. Install aifuel** using any method above. The `aifuel install` wizard handles everything interactively.
+
+**2. Authenticate with Claude** (or your provider of choice):
+
+```bash
+aifuel auth claude
+```
+
+**3. Add the waybar module** to `~/.config/waybar/config.jsonc`:
+
+```jsonc
+// Add "custom/aifuel" to your "modules-right" (or wherever you prefer)
+"custom/aifuel": {
+    "exec": "~/.local/lib/aifuel/aifuel.sh",
+    "return-type": "json",
+    "interval": 30,
+    "tooltip": true,
+    "on-click": "~/.local/lib/aifuel/aifuel-tui.sh",
+    "on-click-right": "~/.local/lib/aifuel/dashboard.sh",
+    "format": "{}",
+    "escape": true
+}
+```
+
+**4. Add the CSS styles** from [`waybar/style.css`](waybar/style.css) to your `~/.config/waybar/style.css`.
+
+**5. Reload waybar.** Your fuel gauge should appear within 30 seconds.
+
+**6. (Optional) Install the Chrome extension** for fastest real-time data:
+
+```bash
+aifuel setup-chrome
+```
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `aifuel` | Run the interactive install wizard (default action) |
+| `aifuel install` | Launch the TUI installation wizard |
+| `aifuel config` | Interactive config editor with live form fields |
+| `aifuel status` | One-line styled usage summary |
+| `aifuel status --full` | Rich dashboard with progress bars, model breakdown, account info |
+| `aifuel status --json` | Machine-readable JSON output (pipe to jq, scripts) |
+| `aifuel statusline` | Compact output for Claude Code statusLine |
+| `aifuel auth` | Show auth status for all providers |
+| `aifuel auth <provider>` | Authenticate with a specific provider |
+| `aifuel check` | Run diagnostics (dependencies, credentials, network) |
+| `aifuel dashboard` | Launch the full-screen TUI dashboard |
+| `aifuel setup-chrome` | Configure Chrome extension and native messaging host |
+| `aifuel completion bash\|zsh\|fish` | Generate shell completion scripts |
+| `aifuel uninstall` | Clean removal with config preservation option |
+| `aifuel version` | Display pixel-art logo with version info |
+
+## Provider Setup
+
+| Provider | Auth Method | CLI Tool | Status |
+|----------|-------------|----------|--------|
+| Claude | CLI auth, cookies, OAuth, Chrome extension | `claude` | Stable |
+| Codex | JSON-RPC, OAuth, `OPENAI_API_KEY` | `codex` | Stable |
+| Copilot | `gh` CLI + CodexBar | `gh` | Stable |
+| Gemini | OAuth via gemini CLI | `gemini` | Experimental |
+| Antigravity | Local language server probe | n/a | Experimental |
+| Any (CodexBar) | CodexBar CLI bridge | `codexbar` | Experimental |
+
+### Quick start per provider
+
+```bash
+# Claude (most common)
+aifuel auth claude
+
+# Codex
+aifuel auth codex
+
+# Copilot (requires gh CLI)
+aifuel auth copilot
+
+# Gemini
+aifuel auth gemini
+
+# Any CodexBar-supported provider
+aifuel auth codexbar
+```
+
+For detailed per-provider configuration, see [docs/PROVIDERS.md](docs/PROVIDERS.md).
 
 ## Waybar Integration
 
-Add the custom module to your waybar config (`~/.config/waybar/config.jsonc`):
+### Module config
 
-1. Add `"custom/aifuel"` to your desired module position (e.g., `"modules-right"`).
-
-2. Add the module definition:
+Add to `~/.config/waybar/config.jsonc`:
 
 ```jsonc
 "custom/aifuel": {
@@ -80,91 +190,29 @@ Add the custom module to your waybar config (`~/.config/waybar/config.jsonc`):
 }
 ```
 
-3. Add the styles to your `~/.config/waybar/style.css` (see `waybar/style.css` in this repo for the full stylesheet).
+### CSS classes
 
-The module outputs JSON with three fields:
+The module outputs a `class` field for conditional styling:
 
-- `text`: the compact display string (e.g., "⛽ 42%")
-- `tooltip`: a rich multi-line breakdown with analytics
-- `class`: one of `ai-ok`, `ai-warn`, or `ai-crit` for color styling
+| Class | Condition | Suggested Color |
+|-------|-----------|-----------------|
+| `ai-ok` | Usage below 60% | `#a6e3a1` (Catppuccin Green) |
+| `ai-warn` | Usage 60%-84% | `#f9e2af` (Catppuccin Yellow) |
+| `ai-crit` | Usage 85%+ | `#f38ba8` (Catppuccin Red) |
 
-## Provider Setup
+See [`waybar/style.css`](waybar/style.css) for the complete stylesheet.
 
-AIFuel supports four providers out of the box. Enable them in `~/.config/aifuel/config.json`:
+### Output format
 
-| Provider | Auth Method | Status |
-|----------|-------------|--------|
-| Claude | CLI auth, cookies, OAuth | Stable |
-| Codex | JSON-RPC app-server, OAuth | Experimental |
-| Gemini | OAuth via gemini CLI | Experimental |
-| Copilot | gh CLI, CodexBar | Experimental |
-| Antigravity | Local language server probe | Experimental |
-| Any (via CodexBar) | CodexBar CLI bridge | Experimental |
+The module emits waybar-compatible JSON with three fields:
 
-For detailed setup instructions per provider, see [docs/PROVIDERS.md](docs/PROVIDERS.md).
+- **`text`**: compact display string (e.g., `⛽ 42%`)
+- **`tooltip`**: rich multi-line breakdown with per-provider analytics, depletion estimates, and reset countdowns
+- **`class`**: one of `ai-ok`, `ai-warn`, or `ai-crit`
 
-### Quick Start (Claude)
+## Claude Code Integration
 
-```bash
-# If you already have the Claude CLI authenticated:
-claude auth
-
-# That's it. AIFuel reads the Claude CLI session automatically.
-```
-
-For richer real-time data, install the Chrome extension from `chrome-extension/` (load unpacked in developer mode) while logged into claude.ai.
-
-## Configuration Reference
-
-The config file lives at `~/.config/aifuel/config.json`. All fields have sensible defaults.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `display_mode` | string | `"full"` | Display mode: `"full"`, `"compact"`, or `"minimal"` |
-| `refresh_interval` | int | `30` | Seconds between waybar refreshes |
-| `cache_ttl_seconds` | int | `120` | How long cached API responses are considered fresh |
-| `notifications_enabled` | bool | `true` | Enable desktop notifications for usage thresholds |
-| `notify_warn_threshold` | int | `80` | Usage percentage that triggers a warning notification |
-| `notify_critical_threshold` | int | `95` | Usage percentage that triggers a critical notification |
-| `notify_cooldown_minutes` | int | `15` | Minimum time between repeated notifications |
-| `history_enabled` | bool | `true` | Log usage data to JSONL files for trend analysis |
-| `history_retention_days` | int | `7` | How many days of history to keep |
-| `theme` | string | `"auto"` | Color theme: `"auto"`, `"dark"`, or `"light"` |
-| `providers` | object | (see below) | Per-provider enable/disable and settings |
-
-### Provider Config
-
-```json
-{
-  "providers": {
-    "claude": { "enabled": true },
-    "codex": { "enabled": false },
-    "gemini": { "enabled": false },
-    "antigravity": { "enabled": false }
-  }
-}
-```
-
-## CLI Commands
-
-```bash
-aifuel install          # Interactive TUI installer wizard
-aifuel auth             # Show auth status for all providers
-aifuel auth claude      # Authenticate with Claude (triggers claude auth login)
-aifuel auth copilot     # Authenticate with GitHub Copilot (triggers gh auth login)
-aifuel check            # Run diagnostics (dependencies, credentials, network)
-aifuel status           # Styled one-line usage summary
-aifuel status --json    # Machine-readable JSON output (pipe to jq, scripts, etc.)
-aifuel statusline       # Compact output for Claude Code statusLine integration
-aifuel dashboard        # Launch the rich TUI dashboard
-aifuel setup-chrome     # Auto-detect and configure Chrome extension + native host
-aifuel uninstall        # Clean removal with config preservation option
-aifuel version          # Print version and build info
-```
-
-### Claude Code StatusLine Integration
-
-Add aifuel as your Claude Code status line provider:
+Add aifuel as your Claude Code status line provider in your Claude Code settings:
 
 ```json
 {
@@ -174,65 +222,158 @@ Add aifuel as your Claude Code status line provider:
 }
 ```
 
-This shows compact usage data directly in your Claude Code terminal: `5h:16% 7d:3% $21.59 359msg`
+Output format:
 
-### Shell Completions
+```
+5h:16% 7d:3% $21.59 359msg
+```
 
-```bash
-# Bash
-aifuel completion bash > ~/.local/share/bash-completion/completions/aifuel
+This gives you a persistent view of your rate limits, daily cost, and message count right in the terminal while coding.
 
-# Zsh
-aifuel completion zsh > ~/.local/share/zsh/site-functions/_aifuel
+## Configuration
 
-# Fish
-aifuel completion fish > ~/.config/fish/completions/aifuel.fish
+Config file: `~/.config/aifuel/config.json`
+
+Edit interactively with `aifuel config` or modify the JSON directly.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `display_mode` | string | `"full"` | Display mode: `"full"`, `"compact"`, or `"icon"` |
+| `refresh_interval` | int | `30` | Seconds between waybar refreshes |
+| `cache_ttl_seconds` | int | `120` | How long cached API responses stay fresh |
+| `notifications_enabled` | bool | `true` | Enable desktop notifications for usage thresholds |
+| `notify_warn_threshold` | int | `80` | Percentage that triggers a warning notification |
+| `notify_critical_threshold` | int | `95` | Percentage that triggers a critical notification |
+| `notify_cooldown_minutes` | int | `15` | Minimum time between repeated notifications |
+| `history_enabled` | bool | `true` | Log usage data to JSONL for trend analysis |
+| `history_retention_days` | int | `7` | How many days of history to retain |
+| `theme` | string | `"auto"` | Color theme: `"auto"`, `"dark"`, or `"light"` |
+| `providers` | object | see below | Per-provider enable/disable toggles |
+
+### Provider config
+
+```json
+{
+  "providers": {
+    "claude": { "enabled": true },
+    "codex": { "enabled": false },
+    "gemini": { "enabled": false },
+    "copilot": { "enabled": false },
+    "antigravity": { "enabled": false }
+  }
+}
 ```
 
 ## Architecture
 
-AIFuel uses a 5-phase data cascade:
+aifuel uses a **5-phase data cascade** that prioritizes speed and never fails silently:
 
-1. **Collection**: Chrome extension, systemd poller, and CLI auth gather raw data
-2. **Aggregation**: Overlay scripts merge multiple data sources per provider
-3. **Caching**: TTL-based JSON cache prevents redundant API calls
-4. **Analytics**: Depletion prediction, peak hours detection, binding limit resolution
-5. **Display**: Waybar JSON output, TUI dashboard, desktop notifications
+```
+Phase 1: Live Feed        Chrome extension polls claude.ai every 2 min
+             |             Fastest source, real-time data
+             v
+Phase 2: Cache            TTL-based JSON cache (55-120s)
+             |             Prevents redundant API calls
+             v
+Phase 3: Cookie Fetch     HackBrowserData extracts cookies, hits claude.ai API
+             |             Works without Chrome extension
+             v
+Phase 4: OAuth Fallback   api.anthropic.com with OAuth tokens
+             |             Last resort, rate-limited
+             v
+Phase 5: Local Data       JSONL session logs + ccusage
+                           Always available, never fails
+```
 
-For the full architecture with diagrams, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Each phase is attempted in order. The first one that returns valid data wins. If all live sources fail, local session data provides a baseline that never goes stale.
 
-## How aifuel Compares
+### File locations
 
-See the full [competitive comparison](docs/COMPARISON.md) against 28 tools including ccusage (12.3k stars), CodexBar (9.8k stars), and Claude Monitor (7.3k stars).
+| Path | Purpose |
+|------|---------|
+| `~/.config/aifuel/config.json` | User configuration |
+| `~/.config/aifuel/chrome-extension/` | Chrome extension source files |
+| `~/.local/lib/aifuel/` | Runtime shell scripts |
+| `~/.local/bin/aifuel` | Go binary |
+| `~/.cache/aifuel/` | Cached API responses |
+| `~/.cache/aifuel/aifuel.log` | Structured log file |
+| `~/.config/systemd/user/aifuel-feed.service` | Background poller service |
+| `~/.config/systemd/user/aifuel-feed.timer` | Poller timer (systemd) |
 
-**What makes aifuel unique:**
-- Only Go-native waybar module with a TUI dashboard
-- 5-phase data cascade (Chrome extension, CLI auth, cookies, polling, local JSONL)
-- Peak hour detection and depletion prediction in waybar
-- Interactive Charm TUI install wizard
+## API Coverage
 
-## Dependencies
+### Usage endpoint: `/api/organizations/{org}/usage`
 
-### Runtime
+| Field | Type | Description | Since |
+|-------|------|-------------|-------|
+| `five_hour` | float | 5-hour utilization percentage | v1.0.0 |
+| `five_hour_resets_at` | string | ISO 8601 reset timestamp | v1.0.0 |
+| `seven_day` | float | 7-day utilization percentage | v1.0.0 |
+| `seven_day_resets_at` | string | ISO 8601 reset timestamp | v1.0.0 |
+| `seven_day_sonnet` | float | 7-day Sonnet-specific utilization | v1.0.0 |
+| `seven_day_sonnet_resets_at` | string | ISO 8601 reset timestamp | v1.0.0 |
+| `seven_day_opus` | float | 7-day Opus utilization (activates when limits go live) | v1.3.0 |
+| `seven_day_opus_resets_at` | string | ISO 8601 reset timestamp | v1.3.0 |
+| `seven_day_oauth_apps` | float | 7-day OAuth app utilization | v1.3.0 |
+| `seven_day_cowork` | float | 7-day cowork utilization | v1.3.0 |
+| `extra_usage.is_enabled` | bool | Whether extra usage credits are active | v1.0.0 |
+| `extra_usage.used_credits` | float | Credits consumed this period | v1.0.0 |
+| `extra_usage.monthly_limit` | float | Monthly credit cap | v1.3.0 |
+| `extra_usage.utilization` | float | Credit utilization percentage | v1.3.0 |
 
-- `jq` for JSON processing in shell scripts
-- `curl` for HTTP requests
-- `notify-send` (libnotify) for desktop notifications (optional)
-- waybar for the status bar module
+### Account endpoint: `/api/organizations/{org}` (new in v1.3.0)
 
-### Build
+| Field | Type | Description |
+|-------|------|-------------|
+| `rate_limit_tier` | string | Actual rate limit tier (not stale credential data) |
+| `billing_type` | string | Account billing type |
+| `capabilities` | array | Enabled capabilities for the org |
+| `available_models` | array | Active, non-overflow models |
 
-- Go 1.22+
-- GoReleaser (for release builds)
+## Shell Completions
 
-### TUI Dashboard
+### Bash
 
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the terminal UI framework
-- [Lip Gloss](https://github.com/charmbracelet/lipgloss) for terminal styling
+```bash
+aifuel completion bash > ~/.local/share/bash-completion/completions/aifuel
+```
+
+### Zsh
+
+```bash
+aifuel completion zsh > "${fpath[1]}/_aifuel"
+```
+
+### Fish
+
+```bash
+aifuel completion fish > ~/.config/fish/completions/aifuel.fish
+```
+
+## Chrome Extension
+
+The bundled Chrome extension provides the fastest data path (Phase 1 in the cascade). It polls `claude.ai/api/organizations/{org}/usage` every 2 minutes and pushes results to aifuel via Chrome native messaging.
+
+As of v1.3.0, it also fetches org metadata (`rate_limit_tier`, `billing_type`, capabilities, models) every 30 minutes.
+
+### Setup
+
+```bash
+# 1. Load the extension in Chrome
+#    - Open chrome://extensions
+#    - Enable "Developer mode"
+#    - Click "Load unpacked" and select ~/.config/aifuel/chrome-extension/
+
+# 2. Configure native messaging
+aifuel setup-chrome
+
+# 3. Make sure you're logged into claude.ai
+#    Data flows to waybar within 2 minutes.
+```
+
+The extension works with Chrome, Chrome Canary, Chromium, and Brave.
 
 ## Testing
-
-Run the test suite:
 
 ```bash
 bash tests/tests.sh
@@ -250,9 +391,42 @@ The test suite validates:
 - Waybar JSON output format
 - Analytics engine edge cases
 
+## How aifuel Compares
+
+See the full [competitive comparison](docs/COMPARISON.md) against 28 tools in the ecosystem.
+
+What makes aifuel unique:
+
+- **Only Go-native waybar module** with embedded scripts and a Charm TUI
+- **5-phase data cascade** that degrades gracefully across Chrome extension, cookies, OAuth, and local data
+- **Peak hour detection and depletion prediction** built into the waybar tooltip
+- **Multi-provider** from a single status bar widget (not one module per provider)
+- **Interactive TUI installer** that detects your system and configures everything
+
+## Dependencies
+
+### Runtime
+
+- `jq` for JSON processing in shell scripts
+- `curl` for HTTP requests
+- `waybar` for the status bar module
+- A Nerd Font (recommended: JetBrainsMono Nerd Font)
+
+### Optional
+
+- `notify-send` (libnotify) for desktop notifications
+- `ccusage` for enhanced session analytics
+- `hack-browser-data` for cookie-based fetching
+- `gum` for enhanced terminal prompts
+
+### Build
+
+- Go 1.24+
+- [GoReleaser](https://goreleaser.com/) (for release builds)
+
 ## Contributing
 
-Contributions are welcome. Please:
+Contributions are welcome.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/your-feature`)
@@ -260,7 +434,7 @@ Contributions are welcome. Please:
 4. Ensure all tests pass (`bash tests/tests.sh`)
 5. Submit a pull request with a clear description
 
-For bug reports and feature requests, open an issue on GitHub.
+For bug reports and feature requests, [open an issue](https://github.com/robertogogoni/aifuel/issues).
 
 ## License
 
@@ -269,5 +443,6 @@ For bug reports and feature requests, open an issue on GitHub.
 ## Credits
 
 - [NihilDigit/waybar-ai-usage](https://github.com/NihilDigit/waybar-ai-usage) for the original claude-usage waybar concept
-- [Charm](https://charm.sh/) for Bubble Tea, Lip Gloss, and the excellent Go TUI libraries
+- [Charm](https://charm.sh/) (Bubble Tea, Lip Gloss, huh) for the Go TUI ecosystem
 - [GoReleaser](https://goreleaser.com/) for cross-platform release automation
+- [Catppuccin](https://catppuccin.com/) for the color palette that ties everything together

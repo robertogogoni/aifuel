@@ -14,12 +14,51 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "1.2.1"
+var version = "1.3.0"
 
 // Flags
-var jsonOutput bool
+var (
+	jsonOutput bool
+	fullOutput bool
+)
+
+// Themed Cobra usage template — Catppuccin-colored section headers and commands
+const themedUsageTemplate = `{{header "Usage:"}}{{if .Runnable}}
+  {{cmdStyle .UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{cmdStyle (printf "%s [command]" .CommandPath)}}{{end}}{{if gt (len .Aliases) 0}}
+
+{{header "Aliases:"}}
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+{{header "Examples:"}}
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+
+{{header "Available Commands:"}}{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding | cmdStyle}}  {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+{{header "Flags:"}}
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+{{header "Global Flags:"}}
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableSubCommands}}
+
+{{dimStyle (printf "Use \"%s [command] --help\" for more information about a command." .CommandPath)}}{{end}}
+`
 
 func main() {
+	ui.Version = version
+
+	// Register Catppuccin-themed template functions for Cobra help
+	cobra.AddTemplateFunc("header", func(s string) string {
+		return lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve).Render(s)
+	})
+	cobra.AddTemplateFunc("cmdStyle", func(s string) string {
+		return lipgloss.NewStyle().Foreground(ui.Peach).Render(s)
+	})
+	cobra.AddTemplateFunc("dimStyle", func(s string) string {
+		return lipgloss.NewStyle().Foreground(ui.Subtext0).Render(s)
+	})
+
 	rootCmd := &cobra.Command{
 		Use:   "aifuel",
 		Short: "AI Usage Fuel Gauge for Waybar",
@@ -71,12 +110,16 @@ func main() {
 	statusCmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show quick one-line usage status",
-		Long:  "Display a formatted one-line summary of current AI usage across all configured providers.\nUse --json for machine-readable output.",
+		Long:  "Display a formatted one-line summary of current AI usage across all configured providers.\nUse --full for a detailed dashboard view, or --json for machine-readable output.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if fullOutput {
+				return runStatusFull()
+			}
 			return runStatus(jsonOutput)
 		},
 	}
 	statusCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output raw JSON for piping to other tools")
+	statusCmd.Flags().BoolVar(&fullOutput, "full", false, "Show detailed dashboard with progress bars")
 
 	// ── statusline ──────────────────────────────────────────────────────
 	statuslineCmd := &cobra.Command{
@@ -104,9 +147,7 @@ func main() {
 		Use:   "version",
 		Short: "Show aifuel version",
 		Run: func(cmd *cobra.Command, args []string) {
-			logo := lipgloss.NewStyle().Bold(true).Foreground(ui.Peach).Render("\u26fd aifuel")
-			ver := lipgloss.NewStyle().Foreground(ui.Mauve).Render("v" + version)
-			fmt.Printf("%s %s\n", logo, ver)
+			fmt.Print(ui.RenderRichLogo())
 		},
 	}
 
@@ -136,7 +177,43 @@ func main() {
 		ValidArgs: []string{"claude", "codex", "gemini", "copilot", "codexbar"},
 	}
 
-	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, statuslineCmd, uninstallCmd, versionCmd, setupChromeCmd, authCmd)
+	// ── completion ──────────────────────────────────────────────────────
+	completionCmd := &cobra.Command{
+		Use:   "completion [bash|zsh|fish]",
+		Short: "Generate shell completion scripts",
+		Long: "Generate shell completion scripts for your shell.\n\n" +
+			"  Bash:  source <(aifuel completion bash)\n" +
+			"  Zsh:   aifuel completion zsh > \"${fpath[1]}/_aifuel\"\n" +
+			"  Fish:  aifuel completion fish | source",
+		DisableFlagsInUseLine: true,
+		ValidArgs:             []string{"bash", "zsh", "fish"},
+		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			switch args[0] {
+			case "bash":
+				return rootCmd.GenBashCompletion(os.Stdout)
+			case "zsh":
+				return rootCmd.GenZshCompletion(os.Stdout)
+			case "fish":
+				return rootCmd.GenFishCompletion(os.Stdout, true)
+			}
+			return nil
+		},
+	}
+
+	// ── config ──────────────────────────────────────────────────────────
+	configCmd := &cobra.Command{
+		Use:   "config",
+		Short: "Interactively edit aifuel configuration",
+		Long:  "Open an interactive form to modify display mode, notifications, cache TTL, and provider settings.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installer.RunConfig()
+		},
+	}
+
+	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, statuslineCmd,
+		uninstallCmd, versionCmd, setupChromeCmd, authCmd, completionCmd, configCmd)
+	rootCmd.SetUsageTemplate(themedUsageTemplate)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, ui.Error.Render("Error: "+err.Error()))
@@ -268,6 +345,224 @@ func runStatus(asJSON bool) error {
 	return nil
 }
 
+// runStatusFull displays a rich dashboard-style status with progress bars
+func runStatusFull() error {
+	data, err := getProviderJSON()
+	if err != nil {
+		fmt.Println(ui.Dim.Render("No usage data available."))
+		return nil
+	}
+
+	fiveHour := getFloat(data, "five_hour", 0)
+	fiveReset := getStr(data, "five_hour_reset", "")
+	sevenDay := getFloat(data, "seven_day", 0)
+	sevenReset := getStr(data, "seven_day_reset", "")
+	sonnet := getFloat(data, "seven_day_sonnet", 0)
+	sonnetReset := getStr(data, "seven_day_sonnet_reset", "")
+	dailyCost := getFloat(data, "daily_cost", 0)
+	msgs := getFloat(data, "session_messages", 0)
+	sessions := getFloat(data, "total_sessions", 0)
+	burnRate := getFloat(data, "burn_rate_per_hour", 0)
+	projected := getFloat(data, "projected_daily_cost", 0)
+	source := getStr(data, "data_source", "?")
+	plan := getStr(data, "plan", "?")
+
+	fuel := lipgloss.NewStyle().Foreground(ui.Peach).Bold(true).Render("\u26fd")
+	header := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve)
+	label := lipgloss.NewStyle().Foreground(ui.Subtext1).Width(14)
+	dim := ui.Dim
+	sep := lipgloss.NewStyle().Foreground(ui.Surface0).Render(strings.Repeat("\u2500", 42))
+
+	fmt.Printf("\n%s %s\n%s\n\n", fuel, header.Render("aifuel Status"), "  "+sep)
+
+	// ── Rate limits ──
+	fmt.Printf("  %s\n\n", header.Render("Rate Limits"))
+
+	renderLimit := func(name string, pct float64, reset string) {
+		bar := ui.RenderProgressBar(pct, 20)
+		pctStr := ui.ColorForPct(pct).Render(fmt.Sprintf("%3.0f%%", pct))
+		countdown := ""
+		if reset != "" {
+			countdown = dim.Render("  resets in ") + dim.Render(formatCountdown(reset))
+		}
+		fmt.Printf("  %s %s %s%s\n", label.Render(name), bar, pctStr, countdown)
+	}
+
+	renderLimit("5-Hour", fiveHour, fiveReset)
+	renderLimit("7-Day", sevenDay, sevenReset)
+	if sonnet > 0 || sonnetReset != "" {
+		renderLimit("7d Sonnet", sonnet, sonnetReset)
+	}
+
+	// Dynamic limits — only shown when active (non-null in API response)
+	opusPct := getNullableFloat(data, "seven_day_opus")
+	opusReset := getStr(data, "seven_day_opus_reset", "")
+	if opusPct >= 0 {
+		renderLimit("7d Opus", opusPct, opusReset)
+	}
+	oauthPct := getNullableFloat(data, "seven_day_oauth_apps")
+	oauthReset := getStr(data, "seven_day_oauth_apps_reset", "")
+	if oauthPct >= 0 {
+		renderLimit("7d OAuth", oauthPct, oauthReset)
+	}
+	coworkPct := getNullableFloat(data, "seven_day_cowork")
+	coworkReset := getStr(data, "seven_day_cowork_reset", "")
+	if coworkPct >= 0 {
+		renderLimit("7d Cowork", coworkPct, coworkReset)
+	}
+
+	// Extra usage credits
+	extraEnabled := false
+	if v, ok := data["extra_usage_enabled"]; ok {
+		if b, ok := v.(bool); ok {
+			extraEnabled = b
+		}
+	}
+	if extraEnabled {
+		extraCredits := getFloat(data, "extra_usage_credits", 0)
+		extraLimit := getNullableFloat(data, "extra_usage_monthly_limit")
+		extraUtil := getNullableFloat(data, "extra_usage_utilization")
+		creditStr := lipgloss.NewStyle().Foreground(ui.Yellow).Render(fmt.Sprintf("$%.2f", extraCredits))
+		if extraLimit >= 0 {
+			creditStr += dim.Render(fmt.Sprintf(" / $%.2f", extraLimit))
+		}
+		if extraUtil >= 0 {
+			fmt.Printf("\n  %s\n\n", header.Render("Extra Usage"))
+			renderLimit("Credits", extraUtil, "")
+			fmt.Printf("  %s %s\n", label.Render("Spent"), creditStr)
+		} else if extraCredits > 0 {
+			fmt.Printf("\n  %s\n\n", header.Render("Extra Usage"))
+			fmt.Printf("  %s %s %s\n", label.Render("Credits used"), creditStr,
+				dim.Render("(enabled)"))
+		}
+	}
+
+	// ── Daily cost ──
+	fmt.Printf("\n  %s\n\n", header.Render("Daily Cost"))
+	fmt.Printf("  %s %s  %s\n",
+		label.Render("Total"),
+		lipgloss.NewStyle().Bold(true).Foreground(ui.Yellow).Render(fmt.Sprintf("$%.2f", dailyCost)),
+		dim.Render(fmt.Sprintf("(%.0f messages, %.0f sessions)", msgs, sessions)))
+	fmt.Printf("  %s %s\n",
+		label.Render("Burn rate"),
+		dim.Render(fmt.Sprintf("$%.2f/hr", burnRate)))
+	fmt.Printf("  %s %s\n",
+		label.Render("Projected"),
+		dim.Render(fmt.Sprintf("$%.2f (16hr day)", projected)))
+
+	// ── Model breakdown ──
+	if models, ok := data["models"]; ok {
+		if modelArr, ok := models.([]interface{}); ok && len(modelArr) > 0 {
+			fmt.Printf("\n  %s\n\n", header.Render("Model Breakdown"))
+			for _, mi := range modelArr {
+				m, ok := mi.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				name := getStr(m, "model", "?")
+				cost := getFloat(m, "cost", 0)
+				input := getFloat(m, "input", 0)
+				output := getFloat(m, "output", 0)
+				fmt.Printf("  %s %s  %s\n",
+					label.Render(name),
+					lipgloss.NewStyle().Foreground(ui.Yellow).Render(fmt.Sprintf("$%.2f", cost)),
+					dim.Render(fmt.Sprintf("(%s in / %s out)", fmtTokens(input), fmtTokens(output))))
+			}
+		}
+	}
+
+	// ── Account info ──
+	if acct, ok := data["account"].(map[string]interface{}); ok {
+		tier := getStr(acct, "rate_limit_tier", "")
+		billing := getStr(acct, "billing_type", "")
+		if tier != "" || billing != "" {
+			fmt.Printf("\n  %s\n\n", header.Render("Account"))
+			if tier != "" {
+				fmt.Printf("  %s %s\n", label.Render("Rate tier"),
+					lipgloss.NewStyle().Foreground(ui.Peach).Bold(true).Render(tier))
+			}
+			if billing != "" {
+				fmt.Printf("  %s %s\n", label.Render("Billing"), dim.Render(billing))
+			}
+			if caps, ok := acct["capabilities"].([]interface{}); ok && len(caps) > 0 {
+				capStrs := make([]string, len(caps))
+				for i, c := range caps {
+					if s, ok := c.(string); ok {
+						capStrs[i] = s
+					}
+				}
+				fmt.Printf("  %s %s\n", label.Render("Capabilities"),
+					dim.Render(strings.Join(capStrs, ", ")))
+			}
+			if models, ok := acct["models"].([]interface{}); ok && len(models) > 0 {
+				var names []string
+				for _, mi := range models {
+					if m, ok := mi.(map[string]interface{}); ok {
+						names = append(names, getStr(m, "name", ""))
+					}
+				}
+				fmt.Printf("  %s %s\n", label.Render("Models"),
+					dim.Render(strings.Join(names, ", ")))
+			}
+		}
+	}
+
+	// ── Footer ──
+	fmt.Printf("\n  %s\n\n",
+		dim.Render(fmt.Sprintf("Source: %s  |  Plan: %s", source, plan)))
+
+	return nil
+}
+
+// formatCountdown converts an ISO 8601 timestamp to a human-friendly countdown
+func formatCountdown(iso string) string {
+	if iso == "" || iso == "null" {
+		return ""
+	}
+	// Shell out to date for portability with ISO 8601 parsing
+	cmd := exec.Command("date", "-d", iso, "+%s")
+	out, err := cmd.Output()
+	if err != nil {
+		return iso
+	}
+	var resetEpoch int64
+	fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &resetEpoch)
+	cmd2 := exec.Command("date", "+%s")
+	out2, _ := cmd2.Output()
+	var nowEpoch int64
+	fmt.Sscanf(strings.TrimSpace(string(out2)), "%d", &nowEpoch)
+
+	diff := resetEpoch - nowEpoch
+	if diff <= 0 {
+		return "expired"
+	}
+	d := diff / 86400
+	h := (diff % 86400) / 3600
+	m := (diff % 3600) / 60
+	switch {
+	case d > 0:
+		return fmt.Sprintf("%dd %dh", d, h)
+	case h > 0:
+		return fmt.Sprintf("%dh %dm", h, m)
+	case m > 0:
+		return fmt.Sprintf("%dm", m)
+	default:
+		return "< 1m"
+	}
+}
+
+// fmtTokens formats a token count as human-readable: 842, 24.9K, 6.1M
+func fmtTokens(n float64) string {
+	switch {
+	case n >= 1000000:
+		return fmt.Sprintf("%.1fM", n/1000000)
+	case n >= 1000:
+		return fmt.Sprintf("%.1fK", n/1000)
+	default:
+		return fmt.Sprintf("%.0f", n)
+	}
+}
+
 // runStatusLine outputs compact text for Claude Code's statusLine integration
 func runStatusLine() error {
 	data, err := getProviderJSON()
@@ -302,6 +597,19 @@ func getFloat(m map[string]interface{}, key string, fallback float64) float64 {
 		}
 	}
 	return fallback
+}
+
+// getNullableFloat returns the float value for a key, or -1 if null/missing.
+// This distinguishes "0%" (active limit at 0) from "null" (limit not active).
+func getNullableFloat(m map[string]interface{}, key string) float64 {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return -1
+	}
+	if f, ok := v.(float64); ok {
+		return f
+	}
+	return -1
 }
 
 func capitalize(s string) string {

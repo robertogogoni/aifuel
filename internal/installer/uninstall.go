@@ -9,9 +9,7 @@ import (
 
 // RunUninstall performs interactive uninstallation of aifuel
 func RunUninstall() error {
-	fmt.Println()
-	fmt.Println(ui.RenderLogo())
-	fmt.Println()
+	fmt.Print(ui.RenderRichLogo())
 	fmt.Println(ui.Warning.Render("  This will remove aifuel from your system."))
 	fmt.Println()
 

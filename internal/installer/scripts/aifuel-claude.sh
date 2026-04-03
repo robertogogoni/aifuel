@@ -101,6 +101,9 @@ if [ -n "$LIVE_FEED" ] && [ -f "$LIVE_FEED" ]; then
         }
 
         tier=$(jq -r '.claudeAiOauth.rateLimitTier // "unknown"' "$CREDENTIALS_FILE" 2>/dev/null)
+        acct=$(_get_account_info)
+        [ -n "$acct" ] && tier=$(echo "$acct" | jq -r '.rate_limit_tier // empty' 2>/dev/null)
+        [ -z "$tier" ] && tier="unknown"
         output=$(cat "$LIVE_FEED" | jq -c --arg plan "$tier" '{
             provider: "claude",
             five_hour: (.five_hour.utilization // 0),
@@ -109,10 +112,19 @@ if [ -n "$LIVE_FEED" ] && [ -f "$LIVE_FEED" ]; then
             seven_day_reset: (.seven_day.resets_at // ""),
             seven_day_sonnet: (.seven_day_sonnet.utilization // 0),
             seven_day_sonnet_reset: (.seven_day_sonnet.resets_at // ""),
+            seven_day_opus: (.seven_day_opus.utilization // null),
+            seven_day_opus_reset: (.seven_day_opus.resets_at // null),
+            seven_day_oauth_apps: (.seven_day_oauth_apps.utilization // null),
+            seven_day_oauth_apps_reset: (.seven_day_oauth_apps.resets_at // null),
+            seven_day_cowork: (.seven_day_cowork.utilization // null),
+            seven_day_cowork_reset: (.seven_day_cowork.resets_at // null),
             extra_usage_credits: (.extra_usage.used_credits // 0),
             extra_usage_enabled: (.extra_usage.is_enabled // false),
+            extra_usage_monthly_limit: (.extra_usage.monthly_limit // null),
+            extra_usage_utilization: (.extra_usage.utilization // null),
             plan: $plan, data_source: "live"
         }' 2>/dev/null)
+        [ -n "$acct" ] && output=$(echo "$output" | jq -c --argjson acct "$acct" '. + {account: $acct}')
 
         td=$(_quick_session)
         [ -n "$td" ] && output=$(echo "$output" | jq -c --argjson td "$td" '. + $td')
@@ -218,6 +230,84 @@ _get_daily_cost() {
           models:$models}'
 }
 
+# ── Account info (long-TTL cache — org tier, billing, models) ────────────────
+
+ACCOUNT_CACHE="$AIFUEL_CACHE_DIR/account-info.json"
+ACCOUNT_CACHE_TTL=3600  # 1 hour — rarely changes
+
+_get_account_info() {
+    # Fast path: return cached if fresh
+    if [ -f "$ACCOUNT_CACHE" ] && [ -s "$ACCOUNT_CACHE" ]; then
+        local age=$(( $(date +%s) - $(stat -c %Y "$ACCOUNT_CACHE") ))
+        if [ "$age" -lt "$ACCOUNT_CACHE_TTL" ]; then
+            cat "$ACCOUNT_CACHE"
+            return 0
+        fi
+    fi
+
+    # Source 1: Extract from Chrome extension live feed (_org field)
+    # The extension fetches /api/organizations/{org} and embeds it as _org
+    local feed
+    feed=$(resolve_live_feed)
+    if [ -n "$feed" ] && [ -f "$feed" ]; then
+        local org_data
+        org_data=$(jq -c '._org // empty' "$feed" 2>/dev/null)
+        if [ -n "$org_data" ] && echo "$org_data" | jq -e '.rate_limit_tier' &>/dev/null; then
+            echo "$org_data" > "$ACCOUNT_CACHE"
+            echo "$org_data"
+            return 0
+        fi
+    fi
+
+    # Source 2: Cookie-based fetch from claude.ai/api/organizations/{org}
+    local cookie_jar
+    for jar in "$AIFUEL_CACHE_DIR/hbd-results/cookie.json" \
+               "$HOME/.cache/ai-usage/cookie-jar.json" \
+               "$HOME/.cache/aifuel/hbd-results/cookie.json"; do
+        [ -f "$jar" ] && { cookie_jar="$jar"; break; }
+    done
+
+    if [ -n "$cookie_jar" ]; then
+        local org_id session_key cf_clearance
+        org_id=$(jq -r '.[] | select(.Host == ".claude.ai" and .KeyName == "lastActiveOrg") | .Value' "$cookie_jar" 2>/dev/null | grep -oP '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+        session_key=$(jq -r '.[] | select(.Host == ".claude.ai" and .KeyName == "sessionKey") | .Value' "$cookie_jar" 2>/dev/null | grep -oP 'sk-ant-sid[^\s]+' | head -1)
+        cf_clearance=$(jq -r '.[] | select(.Host == ".claude.ai" and .KeyName == "cf_clearance") | .Value' "$cookie_jar" 2>/dev/null | grep -oP '[a-zA-Z0-9_.-]{30,}' | tail -1)
+
+        if [ -n "$org_id" ] && [ -n "$session_key" ]; then
+            local cookies="sessionKey=${session_key}; lastActiveOrg=${org_id}"
+            [ -n "$cf_clearance" ] && cookies="${cookies}; cf_clearance=${cf_clearance}"
+
+            local resp
+            resp=$(curl -sf "https://claude.ai/api/organizations/${org_id}" \
+                -H "Cookie: $cookies" \
+                -H "Referer: https://claude.ai/chats" \
+                -H "Origin: https://claude.ai" \
+                -H "Accept: application/json" \
+                --max-time 8 2>/dev/null)
+
+            if [ -n "$resp" ] && echo "$resp" | jq -e '.rate_limit_tier' &>/dev/null; then
+                local acct
+                acct=$(echo "$resp" | jq -c '{
+                    rate_limit_tier: .rate_limit_tier,
+                    billing_type: .billing_type,
+                    capabilities: .capabilities,
+                    created_at: .created_at,
+                    active_flags: (.active_flags // []),
+                    models: [(.claude_ai_bootstrap_models_config // [])[] |
+                        select(.inactive != true and .overflow != true) |
+                        {model: .model, name: .name, description: (.description // "")}]
+                }' 2>/dev/null)
+                [ -n "$acct" ] && echo "$acct" > "$ACCOUNT_CACHE"
+                echo "$acct"
+                return 0
+            fi
+        fi
+    fi
+
+    # Stale cache fallback
+    [ -f "$ACCOUNT_CACHE" ] && cat "$ACCOUNT_CACHE"
+}
+
 token_data=$(_get_session_data)
 cost_data=$(_get_daily_cost)
 
@@ -227,6 +317,10 @@ _build_output() {
     local api_json="$1" source="$2"
     local tier
     tier=$(jq -r '.claudeAiOauth.rateLimitTier // "unknown"' "$CREDENTIALS_FILE" 2>/dev/null)
+    local acct
+    acct=$(_get_account_info)
+    [ -n "$acct" ] && tier=$(echo "$acct" | jq -r '.rate_limit_tier // empty' 2>/dev/null)
+    [ -z "$tier" ] && tier="unknown"
 
     local output
     if [ -n "$api_json" ]; then
@@ -238,8 +332,16 @@ _build_output() {
             seven_day_reset: (.seven_day.resets_at // .seven_day_reset // ""),
             seven_day_sonnet: (.seven_day_sonnet.utilization // 0),
             seven_day_sonnet_reset: (.seven_day_sonnet.resets_at // ""),
+            seven_day_opus: (.seven_day_opus.utilization // null),
+            seven_day_opus_reset: (.seven_day_opus.resets_at // null),
+            seven_day_oauth_apps: (.seven_day_oauth_apps.utilization // null),
+            seven_day_oauth_apps_reset: (.seven_day_oauth_apps.resets_at // null),
+            seven_day_cowork: (.seven_day_cowork.utilization // null),
+            seven_day_cowork_reset: (.seven_day_cowork.resets_at // null),
             extra_usage_credits: (.extra_usage.used_credits // 0),
             extra_usage_enabled: (.extra_usage.is_enabled // false),
+            extra_usage_monthly_limit: (.extra_usage.monthly_limit // null),
+            extra_usage_utilization: (.extra_usage.utilization // null),
             plan: $plan, data_source: $src
         }' 2>/dev/null)
     else
@@ -251,6 +353,7 @@ _build_output() {
     fi
     [ -n "$token_data" ] && output=$(echo "$output" | jq -c --argjson td "$token_data" '. + $td')
     [ -n "$cost_data" ] && output=$(echo "$output" | jq -c --argjson cd "$cost_data" '. + $cd')
+    [ -n "$acct" ] && output=$(echo "$output" | jq -c --argjson acct "$acct" '. + {account: $acct}')
     printf '%s\n' "$output"
 }
 

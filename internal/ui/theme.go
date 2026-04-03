@@ -1,6 +1,13 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Version can be set by the main package to display in the logo
+var Version = "dev"
 
 // Catppuccin Mocha palette
 const (
@@ -123,6 +130,64 @@ func RenderLogo() string {
 	return Banner.Render(content)
 }
 
+// RenderRichLogo returns a rich, pixel-art fuel pump logo with gradient coloring.
+// Designed to match the visual quality of the Claude Code startup banner.
+//
+// The pump uses a warm-to-shadow vertical gradient:
+//   - Flamingo (highlight) cap/top
+//   - Peach (main body)
+//   - Green (fuel gauge window)
+//   - Mauve (display panel)
+//   - Maroon (shadow) base
+func RenderRichLogo() string {
+	p := lipgloss.NewStyle().Foreground(Peach).Bold(true)
+	ph := lipgloss.NewStyle().Foreground(Flamingo)
+	g := lipgloss.NewStyle().Foreground(Green).Bold(true)
+	m := lipgloss.NewStyle().Foreground(Mauve)
+	d := lipgloss.NewStyle().Foreground(Overlay0)
+	sh := lipgloss.NewStyle().Foreground(Maroon)
+
+	// Fuel pump pixel art — pill-shaped body with uniform-width lines
+	// ▄ top cap and ▀ bottom cap create rounded edges
+	// Explicit 2-space indent per line (more reliable than MarginLeft with JoinHorizontal)
+	pump := strings.Join([]string{
+		"  " + ph.Render("▄██████▄"),
+		"  " + p.Render("████████") + d.Render("╮"),
+		"  " + p.Render("██") + g.Render("████") + p.Render("██") + d.Render("│"),
+		"  " + p.Render("██") + g.Render("████") + p.Render("██") + d.Render("╯"),
+		"  " + p.Render("████████"),
+		"  " + p.Render("██") + m.Render("████") + p.Render("██"),
+		"  " + sh.Render("████████"),
+		"  " + sh.Render("▀██████▀"),
+	}, "\n")
+
+	// Text info block (aligned to pump lines via JoinHorizontal)
+	fuel := lipgloss.NewStyle().Foreground(Peach).Bold(true).Render("\u26fd")
+	name := lipgloss.NewStyle().Foreground(Peach).Bold(true).Render("aifuel")
+	ver := lipgloss.NewStyle().Foreground(Mauve).Bold(true).Render("v" + Version)
+	tag := lipgloss.NewStyle().Foreground(Subtext0).Render("AI Usage Fuel Gauge for Waybar")
+
+	// Gradient fuel bar: Peach → Yellow → Green (warm to cool, like a real gauge)
+	bar := lipgloss.NewStyle().Foreground(Peach).Render("\u25b0\u25b0\u25b0\u25b0") +
+		lipgloss.NewStyle().Foreground(Yellow).Render("\u25b0\u25b0\u25b0\u25b0\u25b0") +
+		lipgloss.NewStyle().Foreground(Green).Render("\u25b0\u25b0\u25b0\u25b0\u25b0") +
+		lipgloss.NewStyle().Foreground(Surface0).Render("\u25b1\u25b1\u25b1\u25b1\u25b1\u25b1")
+
+	info := strings.Join([]string{
+		"",
+		"",
+		fuel + " " + name + " " + ver,
+		tag,
+		"",
+		bar,
+		"",
+		"",
+	}, "\n")
+
+	combined := lipgloss.JoinHorizontal(lipgloss.Top, pump, "   ", info)
+	return "\n" + combined + "\n"
+}
+
 // RenderDetectionItem renders a single detection line
 func RenderDetectionItem(name string, found bool, extra string) string {
 	mark := CrossMark
@@ -137,6 +202,41 @@ func RenderDetectionItem(name string, found bool, extra string) string {
 		line += " " + Dim.Render("("+extra+")")
 	}
 	return line
+}
+
+// ColorForPct returns a lipgloss style colored by usage percentage threshold
+func ColorForPct(pct float64) lipgloss.Style {
+	switch {
+	case pct >= 85:
+		return lipgloss.NewStyle().Bold(true).Foreground(Red)
+	case pct >= 60:
+		return lipgloss.NewStyle().Bold(true).Foreground(Yellow)
+	default:
+		return lipgloss.NewStyle().Bold(true).Foreground(Green)
+	}
+}
+
+// RenderProgressBar returns a colored ▰▱ bar. Width is total cells, pct is 0-100.
+func RenderProgressBar(pct float64, width int) string {
+	filled := int(pct / 100 * float64(width))
+	if filled > width {
+		filled = width
+	}
+	if filled < 0 {
+		filled = 0
+	}
+
+	color := Green
+	switch {
+	case pct >= 85:
+		color = Red
+	case pct >= 60:
+		color = Yellow
+	}
+
+	filledStr := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("\u25b0", filled))
+	emptyStr := lipgloss.NewStyle().Foreground(Surface0).Render(strings.Repeat("\u25b1", width-filled))
+	return filledStr + emptyStr
 }
 
 // RenderDetectionItemWarn renders a detection item with warning state

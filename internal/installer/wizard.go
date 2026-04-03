@@ -13,9 +13,7 @@ import (
 // RunWizard executes the interactive installation wizard
 func RunWizard() error {
 	// ── Page 1: Welcome & Detection ──────────────────────────────────────
-	fmt.Println()
-	fmt.Println(ui.RenderLogo())
-	fmt.Println()
+	fmt.Print(ui.RenderRichLogo())
 	fmt.Println(ui.Subtitle.Render("System Detection"))
 	fmt.Println()
 

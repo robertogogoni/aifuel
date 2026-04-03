@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-03
+
+### Added
+
+- **Pixel-art fuel pump logo**: Rich ASCII art with Catppuccin warm-to-shadow gradient (Flamingo cap, Peach body, Green gauge, Mauve display, Maroon base). Renders on `aifuel`, `aifuel install`, `aifuel version`, and `aifuel uninstall`.
+- **Themed Cobra help**: All `--help` output now uses Catppuccin colors via custom template functions (Mauve section headers, Peach command names, Subtext0 hints). Every subcommand inherits the theme automatically.
+- **`aifuel status --full`**: Rich dashboard view with 20-cell progress bars per rate limit, color-coded percentages (green/yellow/red at 0/60/85% thresholds), reset countdowns, daily cost with burn rate and projections, per-model token breakdown, and account metadata.
+- **`aifuel config`**: Interactive configuration editor using huh forms. Pre-fills from existing config.json. Edit providers, display mode, notifications, and cache TTL without touching JSON.
+- **`aifuel completion [bash|zsh|fish]`**: Shell completion generation via Cobra's built-in engine. Tab-completes commands, flags, and valid args (provider names).
+- **5 new API fields captured from `/api/organizations/{org}/usage`**: `seven_day_opus` (Opus-specific 7d limit), `seven_day_oauth_apps` (OAuth app limit), `seven_day_cowork` (team collaboration limit), `extra_usage.monthly_limit` (credit cap), `extra_usage.utilization` (credit usage percentage). All currently null but will activate automatically when Anthropic enables them.
+- **Account endpoint discovery**: New fetch from `/api/organizations/{org}` provides the real `rate_limit_tier` (previously stale from credentials file), `billing_type`, `capabilities`, `active_flags`, and available models (active, non-overflow only). Cached for 1 hour.
+- **Chrome extension org fetch**: `background.js` now fetches org metadata every 30 minutes alongside the 2-minute usage polls. Embedded as `_org` in the live feed JSON, providing the most reliable path for account data (browser handles Cloudflare challenges automatically).
+- **`RenderProgressBar(pct, width)`** and **`ColorForPct(pct)`** UI helpers in theme.go for reusable progress bar rendering across status and future dashboard.
+- **`getNullableFloat()`** helper to distinguish "0%" (active limit at zero) from "null" (limit not yet active) in the Go status display.
+- Copilot added to default provider config template in the install wizard.
+
+### Changed
+
+- `RenderLogo()` retained for compact contexts; `RenderRichLogo()` is now the primary logo for wizard, uninstall, and version commands.
+- `lib.sh` version string updated from "0.1.0" to "1.3.0".
+- Chrome extension manifest version bumped to 1.3.0.
+- Plan tier now sourced from org endpoint (accurate) instead of credentials file (stale). Falls back to credentials if org fetch fails.
+
+### Fixed
+
+- Rate limit tier showing stale value (`default_claude_max_5x`) when the actual org tier was `default_claude_max_20x`. The credentials file is only refreshed on re-auth; the org endpoint always returns the current value.
+
 ## [1.2.1] - 2026-03-29
 
 ### Fixed
@@ -81,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Light/dark theme auto-detection
 - Log rotation and structured logging
 
+[1.3.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.3.0
 [1.2.1]: https://github.com/robertogogoni/aifuel/releases/tag/v1.2.1
 [1.2.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.2.0
 [1.1.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.1.0

@@ -42,6 +42,56 @@ async function fetchUsage() {
   }
 }
 
+// Fetch org/account data (rate tier, billing, models) — cached in extension storage
+// Only refreshed every 30 minutes since it rarely changes
+const ORG_CACHE_TTL_MS = 30 * 60 * 1000;
+
+async function fetchOrgInfo() {
+  try {
+    // Check cached version first
+    const cached = await chrome.storage.local.get(["orgInfo", "orgInfoUpdated"]);
+    if (cached.orgInfo && cached.orgInfoUpdated && (Date.now() - cached.orgInfoUpdated) < ORG_CACHE_TTL_MS) {
+      return cached.orgInfo;
+    }
+
+    const orgId = await getOrgId();
+    if (!orgId) return cached.orgInfo || null;
+
+    const response = await fetch(`${USAGE_API}/${orgId}`, {
+      credentials: "include",
+      headers: {
+        "Accept": "application/json",
+        "Referer": "https://claude.ai/chats"
+      }
+    });
+
+    if (!response.ok) {
+      console.log(`[aifuel] Org API returned ${response.status}`);
+      return cached.orgInfo || null;
+    }
+
+    const raw = await response.json();
+    const orgInfo = {
+      rate_limit_tier: raw.rate_limit_tier,
+      billing_type: raw.billing_type,
+      capabilities: raw.capabilities,
+      created_at: raw.created_at,
+      active_flags: raw.active_flags || [],
+      models: (raw.claude_ai_bootstrap_models_config || [])
+        .filter(m => !m.inactive && !m.overflow)
+        .map(m => ({ model: m.model, name: m.name, description: m.description || "" }))
+    };
+
+    await chrome.storage.local.set({ orgInfo, orgInfoUpdated: Date.now() });
+    console.log(`[aifuel] Got org: tier=${orgInfo.rate_limit_tier} billing=${orgInfo.billing_type}`);
+    return orgInfo;
+  } catch (err) {
+    console.error("[aifuel] Org fetch error:", err.message);
+    const cached = await chrome.storage.local.get(["orgInfo"]);
+    return cached.orgInfo || null;
+  }
+}
+
 // Send data to native messaging host (which writes to file)
 function sendToNativeHost(data) {
   try {
@@ -67,6 +117,11 @@ function sendToNativeHost(data) {
 async function pollUsage() {
   const data = await fetchUsage();
   if (data) {
+    // Merge org info into the usage payload
+    const orgInfo = await fetchOrgInfo();
+    if (orgInfo) {
+      data._org = orgInfo;
+    }
     sendToNativeHost(data);
   }
 }
