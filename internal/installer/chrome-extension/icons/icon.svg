@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f2cdcd"/>
+      <stop offset="40%" stop-color="#fab387"/>
+      <stop offset="100%" stop-color="#eba0ac"/>
+    </linearGradient>
+    <linearGradient id="gauge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a6e3a1"/>
+      <stop offset="100%" stop-color="#94e2d5"/>
+    </linearGradient>
+  </defs>
+  <!-- Pump body -->
+  <rect x="24" y="16" width="64" height="96" rx="12" fill="url(#body)"/>
+  <!-- Fuel gauge window -->
+  <rect x="36" y="32" width="40" height="32" rx="6" fill="url(#gauge)"/>
+  <!-- Display panel -->
+  <rect x="36" y="72" width="40" height="16" rx="4" fill="#cba6f7"/>
+  <!-- Fuel cap -->
+  <rect x="44" y="4" width="24" height="16" rx="4" fill="#f2cdcd"/>
+  <!-- Hose -->
+  <path d="M88 36 Q104 36 104 52 L104 64 Q104 72 96 72" fill="none" stroke="#6c7086" stroke-width="6" stroke-linecap="round"/>
+  <!-- Gauge level indicator lines -->
+  <rect x="40" y="38" width="32" height="4" rx="2" fill="#1e1e2e" opacity="0.15"/>
+  <rect x="40" y="46" width="32" height="4" rx="2" fill="#1e1e2e" opacity="0.15"/>
+  <rect x="40" y="54" width="32" height="4" rx="2" fill="#1e1e2e" opacity="0.15"/>
+  <!-- Display text simulation -->
+  <rect x="40" y="76" width="14" height="3" rx="1" fill="#1e1e2e" opacity="0.3"/>
+  <rect x="58" y="76" width="14" height="3" rx="1" fill="#1e1e2e" opacity="0.3"/>
+  <rect x="40" y="82" width="32" height="3" rx="1" fill="#1e1e2e" opacity="0.2"/>
+  <!-- Base shadow -->
+  <rect x="28" y="108" width="56" height="4" rx="2" fill="#181825" opacity="0.3"/>
+</svg>

@@ -226,7 +226,7 @@ async function checkNotifications(data) {
       type: "basic",
       title: title,
       message: message,
-      iconUrl: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">⛽</text></svg>'),
+      iconUrl: "icons/icon-128.png",
       priority: level === "critical" ? 2 : 1
     });
     await chrome.storage.local.set({ lastNotifyTime: now, lastNotifyLevel: level });

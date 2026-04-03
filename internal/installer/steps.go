@@ -217,7 +217,8 @@ WantedBy=timers.target
 	return nil
 }
 
-// InstallChromeExtension copies the Chrome extension files from the embedded chrome-extension/ directory
+// InstallChromeExtension copies the Chrome extension files (including icons/ subdirectory)
+// from the embedded chrome-extension/ directory
 func InstallChromeExtension() error {
 	configDir, _, _ := GetInstallDirs()
 	extDir := filepath.Join(configDir, "chrome-extension")
@@ -226,32 +227,41 @@ func InstallChromeExtension() error {
 		return fmt.Errorf("failed to create extension dir: %w", err)
 	}
 
-	entries, err := fs.ReadDir(embeddedChromeExt, "chrome-extension")
-	if err != nil {
-		return fmt.Errorf("failed to read embedded chrome-extension: %w", err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	// Walk all files recursively (handles icons/ subdirectory)
+	err := fs.WalkDir(embeddedChromeExt, "chrome-extension", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
 
-		data, err := fs.ReadFile(embeddedChromeExt, filepath.Join("chrome-extension", entry.Name()))
+		// Compute relative path from "chrome-extension/" root
+		relPath := strings.TrimPrefix(path, "chrome-extension/")
+		if relPath == "" || path == "chrome-extension" {
+			return nil // skip root
+		}
+
+		destPath := filepath.Join(extDir, relPath)
+
+		if d.IsDir() {
+			return os.MkdirAll(destPath, 0755)
+		}
+
+		data, err := fs.ReadFile(embeddedChromeExt, path)
 		if err != nil {
-			return fmt.Errorf("failed to read embedded %s: %w", entry.Name(), err)
+			return fmt.Errorf("failed to read embedded %s: %w", relPath, err)
 		}
 
 		// Inject the build-time version into manifest.json
-		if entry.Name() == "manifest.json" && Version != "dev" {
+		if relPath == "manifest.json" && Version != "dev" {
 			data = []byte(strings.Replace(string(data),
 				`"version": "dev"`,
 				fmt.Sprintf(`"version": "%s"`, Version), 1))
 		}
 
-		destPath := filepath.Join(extDir, entry.Name())
-		if err := os.WriteFile(destPath, data, 0644); err != nil {
-			return fmt.Errorf("failed to write %s: %w", destPath, err)
-		}
+		return os.WriteFile(destPath, data, 0644)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to install chrome extension: %w", err)
 	}
 
 	return nil
