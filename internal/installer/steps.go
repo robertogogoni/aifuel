@@ -11,6 +11,11 @@ import (
 	"strings"
 )
 
+// Version is set by main.go from the build-time ldflags value.
+// InstallScripts and InstallChromeExtension inject this into deployed files,
+// replacing the "dev" placeholder so the repo never has a hardcoded version.
+var Version = "dev"
+
 //go:embed all:scripts
 var embeddedScripts embed.FS
 
@@ -68,11 +73,11 @@ func CreateDirectories() error {
 	return nil
 }
 
-// InstallScripts copies scripts from embedded FS or local scripts/ dir to ~/.local/lib/aifuel/
+// InstallScripts copies scripts from embedded FS to ~/.local/lib/aifuel/
+// and stamps the runtime version into lib.sh (replacing the "dev" placeholder).
 func InstallScripts() error {
 	_, _, libDir := GetInstallDirs()
 
-	// Try embedded scripts first
 	entries, err := fs.ReadDir(embeddedScripts, "scripts")
 	if err != nil {
 		return fmt.Errorf("failed to read embedded scripts: %w", err)
@@ -86,6 +91,13 @@ func InstallScripts() error {
 		data, err := fs.ReadFile(embeddedScripts, filepath.Join("scripts", entry.Name()))
 		if err != nil {
 			return fmt.Errorf("failed to read embedded script %s: %w", entry.Name(), err)
+		}
+
+		// Inject the build-time version into lib.sh
+		if entry.Name() == "lib.sh" && Version != "dev" {
+			data = []byte(strings.Replace(string(data),
+				`AIFUEL_VERSION="dev"`,
+				fmt.Sprintf(`AIFUEL_VERSION="%s"`, Version), 1))
 		}
 
 		destPath := filepath.Join(libDir, entry.Name())
@@ -227,6 +239,13 @@ func InstallChromeExtension() error {
 		data, err := fs.ReadFile(embeddedChromeExt, filepath.Join("chrome-extension", entry.Name()))
 		if err != nil {
 			return fmt.Errorf("failed to read embedded %s: %w", entry.Name(), err)
+		}
+
+		// Inject the build-time version into manifest.json
+		if entry.Name() == "manifest.json" && Version != "dev" {
+			data = []byte(strings.Replace(string(data),
+				`"version": "dev"`,
+				fmt.Sprintf(`"version": "%s"`, Version), 1))
 		}
 
 		destPath := filepath.Join(extDir, entry.Name())

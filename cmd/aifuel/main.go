@@ -51,6 +51,7 @@ const themedUsageTemplate = `{{header "Usage:"}}{{if .Runnable}}
 
 func main() {
 	ui.Version = version
+	installer.Version = version
 
 	// Register Catppuccin-themed template functions for Cobra help
 	cobra.AddTemplateFunc("header", func(s string) string {

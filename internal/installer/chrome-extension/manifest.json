@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AIFuel Live Feed",
-  "version": "1.5.0",
+  "version": "dev",
   "description": "Real-time AI usage monitor. Shows rate limits, cost tracking, and reset countdowns for Claude and other providers.",
   "permissions": [
     "cookies",
