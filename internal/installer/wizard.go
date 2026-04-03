@@ -208,7 +208,11 @@ func RunWizard() error {
 		fmt.Println(ui.RenderStepResult(step.label, true, ""))
 	}
 
-	// ── Page 5: Done ─────────────────────────────────────────────────────
+	// ── Page 5: Authentication ──────────────────────────────────────────
+	fmt.Println()
+	runAuthPage(selections)
+
+	// ── Page 6: Done ─────────────────────────────────────────────────────
 	fmt.Println()
 	printSuccessBanner(selections)
 
@@ -257,6 +261,123 @@ func buildInstallSteps(sel WizardSelections) []installStep {
 	}
 
 	return steps
+}
+
+func runAuthPage(sel WizardSelections) {
+	fmt.Println(ui.Subtitle.Render("Provider Authentication"))
+	fmt.Println(ui.Dim.Render("Authenticate with your selected providers"))
+	fmt.Println()
+
+	// Map provider names to auth info
+	type providerAuth struct {
+		name    string
+		icon    string
+		check   func() bool
+		authFn  func() AuthResult
+		hint    string
+	}
+
+	providers := map[string]providerAuth{
+		"claude": {
+			name: "Claude", icon: "\U0001f9e0",
+			check: claudeHasToken, authFn: AuthClaude,
+			hint: "Opens browser for OAuth login",
+		},
+		"codex": {
+			name: "Codex", icon: "\U0001f4bb",
+			check: codexHasToken, authFn: AuthCodex,
+			hint: "Requires codex CLI or OPENAI_API_KEY",
+		},
+		"gemini": {
+			name: "Gemini", icon: "\u2728",
+			check: geminiHasToken, authFn: AuthGemini,
+			hint: "Requires gemini CLI",
+		},
+		"copilot": {
+			name: "Copilot", icon: "\U0001f419",
+			check: copilotIsAuthed, authFn: AuthCopilot,
+			hint: "Uses gh CLI for GitHub auth",
+		},
+	}
+
+	// Show status and offer to auth each selected provider
+	needsAuth := false
+	for _, p := range sel.Providers {
+		pa, ok := providers[p]
+		if !ok {
+			continue
+		}
+
+		if pa.check() {
+			fmt.Printf("  %s %s %s %s\n",
+				pa.icon, ui.Bold.Render(pa.name),
+				ui.Success.Render("\u2714 already authenticated"),
+				ui.Dim.Render("("+CredentialPath(p)+")"))
+		} else {
+			fmt.Printf("  %s %s %s\n",
+				pa.icon, ui.Bold.Render(pa.name),
+				ui.Warning.Render("\u26a0 not authenticated"))
+			needsAuth = true
+		}
+	}
+
+	// Chrome extension reminder
+	if sel.ChromeExtension {
+		fmt.Printf("\n  %s %s %s\n",
+			"\U0001f310", ui.Bold.Render("Chrome Extension"),
+			ui.Dim.Render("Just be logged into claude.ai (cookies are automatic)"))
+	}
+
+	if !needsAuth {
+		fmt.Printf("\n  %s\n", ui.Success.Render("All providers authenticated!"))
+		return
+	}
+
+	// Ask if user wants to authenticate now
+	fmt.Println()
+	var doAuth bool
+	authForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Authenticate now?").
+				Description("Run auth flows for unauthenticated providers").
+				Affirmative("Yes, let's auth").
+				Negative("Skip for now").
+				Value(&doAuth),
+		),
+	).WithTheme(catppuccinTheme())
+
+	if err := authForm.Run(); err != nil || !doAuth {
+		fmt.Println(ui.Dim.Render("  Skipped. Run " + ui.Code.Render("aifuel auth") + " later to authenticate."))
+		return
+	}
+
+	// Run auth for each unauthenticated provider
+	fmt.Println()
+	for _, p := range sel.Providers {
+		pa, ok := providers[p]
+		if !ok || pa.check() {
+			continue
+		}
+
+		fmt.Printf("\n  %s Authenticating %s... %s\n",
+			pa.icon, ui.Bold.Render(pa.name),
+			ui.Dim.Render("("+pa.hint+")"))
+
+		result := pa.authFn()
+
+		if result.NowAuthed {
+			fmt.Printf("  %s %s\n", ui.Success.Render("\u2714"),
+				lipgloss.NewStyle().Foreground(ui.Green).Render("authenticated!"))
+		} else if result.Error != nil {
+			fmt.Printf("  %s %s\n", ui.Error.Render("\u2718"),
+				ui.Dim.Render(result.Error.Error()))
+		} else {
+			fmt.Printf("  %s %s\n", ui.Warning.Render("\u26a0"),
+				ui.Dim.Render("skipped"))
+		}
+	}
+	fmt.Println()
 }
 
 func printSuccessBanner(sel WizardSelections) {
@@ -315,9 +436,10 @@ func printSuccessBanner(sel WizardSelections) {
 	fmt.Println()
 
 	moreSteps := []string{
-		"2. Run " + ui.Code.Render("aifuel check") + " to verify everything works",
-		"3. Run " + ui.Code.Render("aifuel dashboard") + " to open the TUI dashboard",
-		"4. Restart waybar to load the new module",
+		"2. Restart waybar to load the new module",
+		"3. Run " + ui.Code.Render("aifuel check") + " to verify everything works",
+		"4. Run " + ui.Code.Render("aifuel dashboard") + " to open the TUI dashboard",
+		"5. Run " + ui.Code.Render("aifuel admin setup") + " for official cost reports (optional)",
 	}
 	for _, s := range moreSteps {
 		fmt.Println("  " + s)
