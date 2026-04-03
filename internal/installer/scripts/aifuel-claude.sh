@@ -126,6 +126,12 @@ if [ -n "$LIVE_FEED" ] && [ -f "$LIVE_FEED" ]; then
         }' 2>/dev/null)
         [ -n "$acct" ] && output=$(echo "$output" | jq -c --argjson acct "$acct" '. + {account: $acct}')
 
+        # Extract per-model rate limits from live feed (_rate_limits field set by Chrome extension)
+        if [ -n "$LIVE_FEED" ] && [ -f "$LIVE_FEED" ]; then
+            rl=$(jq -c '._rate_limits // empty' "$LIVE_FEED" 2>/dev/null)
+            [ -n "$rl" ] && output=$(echo "$output" | jq -c --argjson rl "$rl" '. + {rate_limits: $rl}')
+        fi
+
         td=$(_quick_session)
         [ -n "$td" ] && output=$(echo "$output" | jq -c --argjson td "$td" '. + $td')
         cd=$(_quick_cost)

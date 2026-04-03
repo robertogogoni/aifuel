@@ -92,6 +92,52 @@ async function fetchOrgInfo() {
   }
 }
 
+// Fetch per-model rate limits (concurrency, thinking RPM) — same cache TTL as org
+async function fetchRateLimits() {
+  try {
+    const cached = await chrome.storage.local.get(["rateLimits", "rateLimitsUpdated"]);
+    if (cached.rateLimits && cached.rateLimitsUpdated && (Date.now() - cached.rateLimitsUpdated) < ORG_CACHE_TTL_MS) {
+      return cached.rateLimits;
+    }
+
+    const orgId = await getOrgId();
+    if (!orgId) return cached.rateLimits || null;
+
+    const response = await fetch(`${USAGE_API}/${orgId}/rate_limits`, {
+      credentials: "include",
+      headers: {
+        "Accept": "application/json",
+        "Referer": "https://claude.ai/chats"
+      }
+    });
+
+    if (!response.ok) {
+      console.log(`[aifuel] Rate limits API returned ${response.status}`);
+      return cached.rateLimits || null;
+    }
+
+    const raw = await response.json();
+    const rateLimits = {
+      rate_limit_tier: raw.rate_limit_tier,
+      model_limits: (raw.tier_model_rate_limiters || []).reduce((acc, item) => {
+        if (!acc[item.model_group]) acc[item.model_group] = {};
+        acc[item.model_group][item.limiter] = item.value;
+        return acc;
+      }, {}),
+      spend_threshold: raw.spend_threshold,
+      custom_limiters: raw.custom_model_rate_limiters
+    };
+
+    await chrome.storage.local.set({ rateLimits, rateLimitsUpdated: Date.now() });
+    console.log(`[aifuel] Got rate limits: ${Object.keys(rateLimits.model_limits).length} model groups`);
+    return rateLimits;
+  } catch (err) {
+    console.error("[aifuel] Rate limits fetch error:", err.message);
+    const cached = await chrome.storage.local.get(["rateLimits"]);
+    return cached.rateLimits || null;
+  }
+}
+
 // Send data to native messaging host (which writes to file)
 function sendToNativeHost(data) {
   try {
@@ -117,11 +163,10 @@ function sendToNativeHost(data) {
 async function pollUsage() {
   const data = await fetchUsage();
   if (data) {
-    // Merge org info into the usage payload
-    const orgInfo = await fetchOrgInfo();
-    if (orgInfo) {
-      data._org = orgInfo;
-    }
+    // Merge org info and rate limits into the usage payload
+    const [orgInfo, rateLimits] = await Promise.all([fetchOrgInfo(), fetchRateLimits()]);
+    if (orgInfo) data._org = orgInfo;
+    if (rateLimits) data._rate_limits = rateLimits;
     sendToNativeHost(data);
   }
 }

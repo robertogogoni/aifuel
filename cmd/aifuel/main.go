@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/robertogogoni/aifuel/internal/installer"
@@ -14,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "1.3.0"
+var version = "1.4.0"
 
 // Flags
 var (
@@ -211,8 +212,56 @@ func main() {
 		},
 	}
 
+	// ── admin ───────────────────────────────────────────────────────────
+	adminCmd := &cobra.Command{
+		Use:   "admin",
+		Short: "Anthropic Admin API: cost reports, usage analytics, Claude Code metrics",
+		Long: "Access the official Anthropic Admin API for cost, usage, and Claude Code analytics.\n\n" +
+			"Requires an Admin API key (sk-ant-admin...) from the Claude Console.\n" +
+			"Set via ANTHROPIC_ADMIN_KEY env var or 'aifuel admin setup'.",
+	}
+
+	adminSetupCmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Store your Anthropic Admin API key",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAdminSetup()
+		},
+	}
+
+	adminCostCmd := &cobra.Command{
+		Use:   "cost",
+		Short: "Show cost report for the current billing period",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAdminCost()
+		},
+	}
+
+	adminUsageCmd := &cobra.Command{
+		Use:   "usage",
+		Short: "Show token usage report by model",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAdminUsage()
+		},
+	}
+
+	adminAnalyticsCmd := &cobra.Command{
+		Use:   "analytics [date]",
+		Short: "Show Claude Code productivity metrics",
+		Long:  "Display Claude Code analytics for a specific day (default: today).\nDate format: YYYY-MM-DD",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			date := time.Now().UTC().Format("2006-01-02")
+			if len(args) > 0 {
+				date = args[0]
+			}
+			return runAdminAnalytics(date)
+		},
+	}
+
+	adminCmd.AddCommand(adminSetupCmd, adminCostCmd, adminUsageCmd, adminAnalyticsCmd)
+
 	rootCmd.AddCommand(installCmd, checkCmd, dashboardCmd, statusCmd, statuslineCmd,
-		uninstallCmd, versionCmd, setupChromeCmd, authCmd, completionCmd, configCmd)
+		uninstallCmd, versionCmd, setupChromeCmd, authCmd, completionCmd, configCmd, adminCmd)
 	rootCmd.SetUsageTemplate(themedUsageTemplate)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -468,6 +517,47 @@ func runStatusFull() error {
 					lipgloss.NewStyle().Foreground(ui.Yellow).Render(fmt.Sprintf("$%.2f", cost)),
 					dim.Render(fmt.Sprintf("(%s in / %s out)", fmtTokens(input), fmtTokens(output))))
 			}
+		}
+	}
+
+	// ── Per-model rate limits ──
+	if rl, ok := data["rate_limits"].(map[string]interface{}); ok {
+		if ml, ok := rl["model_limits"].(map[string]interface{}); ok && len(ml) > 0 {
+			fmt.Printf("\n  %s\n\n", header.Render("Per-Model Limits"))
+
+			nameLabel := lipgloss.NewStyle().Foreground(ui.Peach).Width(20)
+			valStyle := lipgloss.NewStyle().Foreground(ui.Text)
+
+			fmt.Printf("  %s %s  %s\n",
+				nameLabel.Render("Model"),
+				valStyle.Copy().Width(14).Render("Concurrency"),
+				valStyle.Render("Thinking RPM"))
+			fmt.Printf("  %s\n", lipgloss.NewStyle().Foreground(ui.Surface0).Render(strings.Repeat("\u2500", 48)))
+
+			for group, limits := range ml {
+				limMap, ok := limits.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				conc := "-"
+				if v, ok := limMap["concurrents"].(float64); ok {
+					conc = fmt.Sprintf("%.0f", v)
+				}
+				rpm := "-"
+				if v, ok := limMap["raw_thinking_requests_per_minute"].(float64); ok {
+					rpm = fmt.Sprintf("%.0f/min", v)
+				}
+				// Clean up model group name for display
+				displayName := strings.ReplaceAll(group, "_", " ")
+				fmt.Printf("  %s %s  %s\n",
+					nameLabel.Render(displayName),
+					dim.Render(fmt.Sprintf("%-14s", conc)),
+					dim.Render(rpm))
+			}
+		}
+		if st := rl["spend_threshold"]; st != nil {
+			fmt.Printf("\n  %s %s\n", label.Render("Spend threshold"),
+				lipgloss.NewStyle().Foreground(ui.Yellow).Render(fmt.Sprintf("%v", st)))
 		}
 	}
 
@@ -787,5 +877,257 @@ func runAuth(args []string) error {
 	} else {
 		fmt.Printf("\n  %s %s\n\n", ui.CrossMark, ui.Error.Render("Authentication was not completed."))
 	}
+	return nil
+}
+
+// ── Admin API handlers ──────────────────────────────────────────────────────
+
+func requireAdmin() *installer.AdminClient {
+	client := installer.NewAdminClient()
+	if client == nil {
+		fmt.Printf("  %s %s\n\n", ui.CrossMark,
+			ui.Error.Render("No Admin API key found."))
+		fmt.Printf("  Set %s or run %s\n\n",
+			ui.Code.Render("ANTHROPIC_ADMIN_KEY"),
+			ui.Code.Render("aifuel admin setup"))
+		fmt.Printf("  Provision one at %s\n\n",
+			ui.Dim.Render("https://console.anthropic.com/settings/admin-keys"))
+	}
+	return client
+}
+
+func runAdminSetup() error {
+	fuel := lipgloss.NewStyle().Foreground(ui.Peach).Bold(true).Render("\u26fd")
+	header := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve)
+
+	fmt.Printf("\n%s %s\n\n", fuel, header.Render("Admin API Setup"))
+	fmt.Printf("  Provision an Admin API key at:\n")
+	fmt.Printf("  %s\n\n", ui.Code.Render("https://console.anthropic.com/settings/admin-keys"))
+	fmt.Printf("  The key starts with %s\n\n", ui.Code.Render("sk-ant-admin..."))
+
+	// Check if already configured
+	existing := installer.GetAdminKey()
+	if existing != "" {
+		fmt.Printf("  %s Admin key already configured (%s...)\n\n",
+			ui.CheckMark, existing[:min(len(existing), 20)])
+	}
+
+	fmt.Printf("  Paste your Admin API key (or press Enter to skip): ")
+	var key string
+	fmt.Scanln(&key)
+	key = strings.TrimSpace(key)
+
+	if key == "" {
+		fmt.Printf("\n  %s\n\n", ui.Dim.Render("Skipped. You can also set ANTHROPIC_ADMIN_KEY in your environment."))
+		return nil
+	}
+
+	if !strings.HasPrefix(key, "sk-ant-admin") {
+		return fmt.Errorf("invalid key format: expected sk-ant-admin... prefix")
+	}
+
+	// Verify the key works
+	client := &installer.AdminClient{Key: key, Version: "2023-06-01"}
+	org, err := client.GetOrgInfo()
+	if err != nil {
+		return fmt.Errorf("key verification failed: %w", err)
+	}
+
+	fmt.Printf("\n  %s Verified: %s\n", ui.CheckMark,
+		lipgloss.NewStyle().Foreground(ui.Peach).Render(org.Name))
+
+	if err := installer.SaveAdminKey(key); err != nil {
+		return fmt.Errorf("failed to save key: %w", err)
+	}
+
+	fmt.Printf("  %s Saved to config (permissions: 0600)\n\n", ui.CheckMark)
+	return nil
+}
+
+func runAdminCost() error {
+	client := requireAdmin()
+	if client == nil {
+		return nil
+	}
+
+	fuel := lipgloss.NewStyle().Foreground(ui.Peach).Bold(true).Render("\u26fd")
+	header := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve)
+	label := lipgloss.NewStyle().Foreground(ui.Subtext1).Width(22)
+	dim := ui.Dim
+
+	// Last 7 days
+	now := time.Now().UTC()
+	endAt := now.Format("2006-01-02T15:04:05Z")
+	startAt := now.AddDate(0, 0, -7).Format("2006-01-02T15:04:05Z")
+
+	report, err := client.GetCostReport(startAt, endAt, []string{"description"})
+	if err != nil {
+		return fmt.Errorf("cost report failed: %w", err)
+	}
+
+	fmt.Printf("\n%s %s\n", fuel, header.Render("Cost Report (Last 7 Days)"))
+	fmt.Printf("  %s\n\n", lipgloss.NewStyle().Foreground(ui.Surface0).Render(strings.Repeat("\u2500", 50)))
+
+	var totalCost float64
+	modelCosts := make(map[string]float64)
+
+	for _, bucket := range report.Data {
+		for _, item := range bucket.CostSubitems {
+			var cost float64
+			fmt.Sscanf(item.Cost, "%f", &cost)
+			totalCost += cost
+			name := item.Description
+			if item.Model != "" {
+				name = item.Model
+			}
+			modelCosts[name] += cost
+		}
+	}
+
+	fmt.Printf("  %s %s\n\n",
+		label.Render("Total (7 days)"),
+		lipgloss.NewStyle().Bold(true).Foreground(ui.Yellow).Render(fmt.Sprintf("$%.2f", totalCost/100)))
+
+	if len(modelCosts) > 0 {
+		fmt.Printf("  %s\n\n", header.Render("Breakdown"))
+		for name, cost := range modelCosts {
+			displayName := strings.ReplaceAll(name, "claude-", "")
+			fmt.Printf("  %s %s\n",
+				label.Render(displayName),
+				dim.Render(fmt.Sprintf("$%.2f", cost/100)))
+		}
+	}
+
+	fmt.Println()
+	return nil
+}
+
+func runAdminUsage() error {
+	client := requireAdmin()
+	if client == nil {
+		return nil
+	}
+
+	fuel := lipgloss.NewStyle().Foreground(ui.Peach).Bold(true).Render("\u26fd")
+	header := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve)
+	label := lipgloss.NewStyle().Foreground(ui.Subtext1).Width(22)
+	dim := ui.Dim
+
+	now := time.Now().UTC()
+	endAt := now.Format("2006-01-02T15:04:05Z")
+	startAt := now.AddDate(0, 0, -7).Format("2006-01-02T15:04:05Z")
+
+	report, err := client.GetUsageReport(startAt, endAt, []string{"model"}, "1d")
+	if err != nil {
+		return fmt.Errorf("usage report failed: %w", err)
+	}
+
+	fmt.Printf("\n%s %s\n", fuel, header.Render("Token Usage (Last 7 Days)"))
+	fmt.Printf("  %s\n\n", lipgloss.NewStyle().Foreground(ui.Surface0).Render(strings.Repeat("\u2500", 60)))
+
+	var totalIn, totalOut, totalCacheRead, totalCacheCreate int64
+	for _, bucket := range report.Data {
+		model := bucket.Model
+		if model == "" {
+			model = "all"
+		}
+		displayName := strings.ReplaceAll(model, "claude-", "")
+		in := bucket.InputTokens + bucket.CacheReadTokens + bucket.CacheCreateTokens
+		out := bucket.OutputTokens
+
+		fmt.Printf("  %s %s in  %s out  %s cached\n",
+			label.Render(displayName),
+			dim.Render(fmtTokens(float64(in))),
+			dim.Render(fmtTokens(float64(out))),
+			dim.Render(fmtTokens(float64(bucket.CacheReadTokens))))
+
+		totalIn += bucket.InputTokens
+		totalOut += bucket.OutputTokens
+		totalCacheRead += bucket.CacheReadTokens
+		totalCacheCreate += bucket.CacheCreateTokens
+	}
+
+	fmt.Printf("\n  %s %s in  %s out  %s cache read  %s cache create\n\n",
+		label.Render("TOTAL"),
+		lipgloss.NewStyle().Foreground(ui.Peach).Render(fmtTokens(float64(totalIn))),
+		lipgloss.NewStyle().Foreground(ui.Green).Render(fmtTokens(float64(totalOut))),
+		dim.Render(fmtTokens(float64(totalCacheRead))),
+		dim.Render(fmtTokens(float64(totalCacheCreate))))
+
+	return nil
+}
+
+func runAdminAnalytics(date string) error {
+	client := requireAdmin()
+	if client == nil {
+		return nil
+	}
+
+	fuel := lipgloss.NewStyle().Foreground(ui.Peach).Bold(true).Render("\u26fd")
+	header := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve)
+	label := lipgloss.NewStyle().Foreground(ui.Subtext1).Width(22)
+	dim := ui.Dim
+
+	report, err := client.GetClaudeCodeAnalytics(date)
+	if err != nil {
+		return fmt.Errorf("analytics failed: %w", err)
+	}
+
+	fmt.Printf("\n%s %s\n", fuel, header.Render("Claude Code Analytics: "+date))
+	fmt.Printf("  %s\n\n", lipgloss.NewStyle().Foreground(ui.Surface0).Render(strings.Repeat("\u2500", 55)))
+
+	if len(report.Data) == 0 {
+		fmt.Printf("  %s\n\n", dim.Render("No Claude Code activity for this date."))
+		return nil
+	}
+
+	var totalSessions, totalAdded, totalRemoved, totalCommits, totalPRs int
+	var totalEditAccepted, totalEditRejected int
+	var totalCostCents float64
+
+	for _, entry := range report.Data {
+		actor := "unknown"
+		if a, ok := entry.Actor["type"].(string); ok && a == "user_actor" {
+			if email, ok := entry.Actor["email_address"].(string); ok {
+				actor = email
+			}
+		}
+
+		totalSessions += entry.CoreMetrics.NumSessions
+		totalAdded += entry.CoreMetrics.LinesOfCode.Added
+		totalRemoved += entry.CoreMetrics.LinesOfCode.Removed
+		totalCommits += entry.CoreMetrics.Commits
+		totalPRs += entry.CoreMetrics.PullRequests
+		totalEditAccepted += entry.ToolActions.EditTool.Accepted + entry.ToolActions.MultiEdit.Accepted
+		totalEditRejected += entry.ToolActions.EditTool.Rejected + entry.ToolActions.MultiEdit.Rejected
+
+		for _, m := range entry.ModelBreakdown {
+			totalCostCents += m.EstimatedCost.Amount
+		}
+
+		_ = actor // Used in per-user view if multiple users
+	}
+
+	fmt.Printf("  %s %s\n", label.Render("Users active"), dim.Render(fmt.Sprintf("%d", len(report.Data))))
+	fmt.Printf("  %s %s\n", label.Render("Sessions"), dim.Render(fmt.Sprintf("%d", totalSessions)))
+	fmt.Printf("  %s %s added, %s removed\n", label.Render("Lines of code"),
+		lipgloss.NewStyle().Foreground(ui.Green).Render(fmt.Sprintf("+%d", totalAdded)),
+		lipgloss.NewStyle().Foreground(ui.Red).Render(fmt.Sprintf("-%d", totalRemoved)))
+	fmt.Printf("  %s %s\n", label.Render("Commits"), dim.Render(fmt.Sprintf("%d", totalCommits)))
+	fmt.Printf("  %s %s\n", label.Render("Pull requests"), dim.Render(fmt.Sprintf("%d", totalPRs)))
+
+	totalEdits := totalEditAccepted + totalEditRejected
+	if totalEdits > 0 {
+		rate := float64(totalEditAccepted) / float64(totalEdits) * 100
+		fmt.Printf("  %s %s (%d/%d)\n", label.Render("Edit acceptance"),
+			ui.ColorForPct(100-rate).Render(fmt.Sprintf("%.0f%%", rate)),
+			totalEditAccepted, totalEdits)
+	}
+
+	fmt.Printf("  %s %s\n",
+		label.Render("Estimated cost"),
+		lipgloss.NewStyle().Bold(true).Foreground(ui.Yellow).Render(fmt.Sprintf("$%.2f", totalCostCents/100)))
+
+	fmt.Println()
 	return nil
 }

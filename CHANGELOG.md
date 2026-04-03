@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-04-03
+
+### Added
+
+- **`/api/organizations/{org}/rate_limits` endpoint**: Chrome extension now fetches per-model concurrency limits and thinking requests-per-minute caps every 30 minutes. Displayed in `aifuel status --full` under "Per-Model Limits" with a table showing concurrency slots and thinking RPM per model group.
+- **`/v1/models` endpoint discovered**: OAuth API returns the full model catalog with token limits (max_input_tokens, max_tokens), creation dates, and capabilities (batch, citations, code_execution, thinking, etc.).
+- **Anthropic Admin API integration** (`aifuel admin` command tree):
+  - `aifuel admin setup`: Interactive key provisioning with verification against `/v1/organizations/me`. Stores key in config.json with 0600 permissions.
+  - `aifuel admin cost`: Official USD cost report for the last 7 days from `/v1/organizations/cost_report`, grouped by description/model.
+  - `aifuel admin usage`: Token usage report from `/v1/organizations/usage_report/messages` with per-model breakdown (input, output, cache read, cache create).
+  - `aifuel admin analytics [date]`: Claude Code productivity metrics from `/v1/organizations/usage_report/claude_code` showing sessions, lines added/removed, commits, PRs, edit acceptance rate, and estimated cost.
+- **Admin API client** (`internal/installer/admin.go`): Full Go client with typed structs for CostReport, UsageReport, ClaudeCodeReport, OrgInfo. Supports `ANTHROPIC_ADMIN_KEY` env var or config.json storage.
+- **4 new claude.ai endpoints discovered**: `/api/organizations/{org}/rate_limits` (per-model concurrency), `/api/organizations/{org}/chat_conversations` (226 web conversations), `/api/organizations/{org}/projects` (14 projects), `/api/organizations/{org}/members` (org members).
+
+### Changed
+
+- Chrome extension `pollUsage()` now fetches org info and rate limits in parallel with `Promise.all()`.
+- `aifuel status --full` now shows per-model rate limits section when data is available from the Chrome extension.
+
 ## [1.3.0] - 2026-04-03
 
 ### Added
@@ -108,6 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Light/dark theme auto-detection
 - Log rotation and structured logging
 
+[1.4.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.4.0
 [1.3.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.3.0
 [1.2.1]: https://github.com/robertogogoni/aifuel/releases/tag/v1.2.1
 [1.2.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.2.0
