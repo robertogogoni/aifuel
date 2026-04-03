@@ -234,6 +234,26 @@ async function checkNotifications(data) {
   }
 }
 
+// Store usage history for sparkline charts (rolling 24h, max 720 entries at 2min intervals)
+const MAX_HISTORY = 720;
+
+async function storeUsageHistory(data) {
+  if (!data?.five_hour) return;
+  const stored = await chrome.storage.local.get(["usageHistory"]);
+  const history = stored.usageHistory || [];
+
+  history.push({
+    t: Date.now(),
+    h5: Math.round(data.five_hour.utilization || 0),
+    d7: Math.round(data.seven_day.utilization || 0)
+  });
+
+  // Keep rolling window
+  while (history.length > MAX_HISTORY) history.shift();
+
+  await chrome.storage.local.set({ usageHistory: history });
+}
+
 // Main poll function
 async function pollUsage() {
   const data = await fetchUsage();
@@ -246,6 +266,7 @@ async function pollUsage() {
     sendToNativeHost(data);
     updateBadge(data);
     checkNotifications(data);
+    storeUsageHistory(data);
   }
 }
 
@@ -263,11 +284,26 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// Also poll on extension install/startup
+// ── Context menu: "Ask Claude about this" ──────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[aifuel] Extension installed, starting live feed");
+
+  // Create context menu for selected text
+  chrome.contextMenus.create({
+    id: "aifuel-ask-claude",
+    title: "Ask Claude about this",
+    contexts: ["selection"]
+  });
+
   setupAlarm();
   pollUsage();
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "aifuel-ask-claude" && info.selectionText) {
+    const text = encodeURIComponent(info.selectionText.trim());
+    chrome.tabs.create({ url: `https://claude.ai/new?q=${text}` });
+  }
 });
 
 chrome.runtime.onStartup.addListener(() => {

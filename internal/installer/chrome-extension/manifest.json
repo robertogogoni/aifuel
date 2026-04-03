@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AIFuel Live Feed",
   "version": "dev",
-  "description": "Real-time AI usage monitor. Shows rate limits, cost tracking, and reset countdowns for Claude and other providers.",
+  "description": "Real-time AI usage monitor with live conversation cost tracking, rate limit bars, usage history, and desktop notifications.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -14,7 +14,8 @@
     "nativeMessaging",
     "alarms",
     "storage",
-    "notifications"
+    "notifications",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://claude.ai/*"
@@ -35,5 +36,18 @@
   "options_ui": {
     "page": "options.html",
     "open_in_tab": false
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content-inject.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content.js"],
+      "matches": ["https://claude.ai/*"]
+    }
+  ]
 }

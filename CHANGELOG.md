@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-04-03
+
+### Added
+
+- **Real-time conversation cost tracker** (content script): Intercepts streaming responses on claude.ai to count tokens and compute costs as they flow. Shows a floating Catppuccin-themed widget (bottom-right) with running cost, token count, turn count, and model name. Injects per-message cost badges after each response.
+- **Tabbed popup UI**: Popup now has 3 tabs: Usage (rate limits, sparkline, conversation cost), Chats (searchable conversation list), and Estimate (token/cost calculator).
+- **Usage history sparkline**: Stores rolling 24h of 5-hour usage percentages (max 720 data points at 2min intervals). Renders a canvas sparkline with green fill gradient, and dashed threshold lines at 60% and 85%.
+- **Conversation search**: Fetches all conversations from `/api/organizations/{org}/chat_conversations`, displays in a searchable, scrollable list with model tags and time-ago timestamps. Click to open directly in claude.ai.
+- **Token estimator**: Paste text to estimate token count and cost for Opus ($15/M) and Sonnet ($3/M) before sending. Uses ~3.5 chars/token approximation.
+- **Context menu "Ask Claude about this"**: Right-click selected text on any page to open a new claude.ai conversation with the text pre-filled.
+- **Content script injection**: `content-inject.js` loads `content.js` into the page context via `web_accessible_resources` so it can intercept `window.fetch` for streaming response observation.
+
+### Changed
+
+- Popup redesigned with tab bar, compact stats grid (3 columns), and separated conversation cost card.
+- Extension manifest: added `contextMenus` permission, `content_scripts` for claude.ai injection, `web_accessible_resources` for content.js.
+- Background.js: added `storeUsageHistory()` for sparkline data, context menu creation on install.
+
 ## [1.5.0] - 2026-04-03
 
 ### Added
@@ -145,6 +163,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Light/dark theme auto-detection
 - Log rotation and structured logging
 
+[1.6.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.6.0
 [1.5.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.5.0
 [1.4.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.4.0
 [1.3.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.3.0
