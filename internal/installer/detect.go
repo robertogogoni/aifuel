@@ -255,8 +255,10 @@ func DetectExtensionID(chromeProfilePath string, extensionName string) string {
 
 			// Method 2: Match by path (works for unpacked extensions)
 			if extPath, ok := ext["path"].(string); ok {
-				// Direct match: extension loaded from aifuel's directory
-				if extPath == aifuelExtDir || strings.HasSuffix(extPath, "/aifuel/chrome-extension") {
+				// Direct match: extension loaded from aifuel's or legacy ai-usage directory
+				if extPath == aifuelExtDir ||
+					strings.HasSuffix(extPath, "/aifuel/chrome-extension") ||
+					strings.HasSuffix(extPath, "/ai-usage/chrome-extension") {
 					return extID
 				}
 				// Read the on-disk manifest to check the name

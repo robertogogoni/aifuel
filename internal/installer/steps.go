@@ -264,7 +264,43 @@ func InstallChromeExtension() error {
 		return fmt.Errorf("failed to install chrome extension: %w", err)
 	}
 
+	// Also deploy to legacy ai-usage path if Chrome loaded the extension from there.
+	// This ensures reload picks up the new files regardless of which path Chrome uses.
+	home, _ := os.UserHomeDir()
+	legacyDir := filepath.Join(home, ".config", "ai-usage", "chrome-extension")
+	if info, err := os.Stat(legacyDir); err == nil && info.IsDir() {
+		// Copy all files from aifuel dir to legacy dir
+		_ = filepath.Walk(extDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || path == extDir {
+				return nil
+			}
+			relPath, _ := filepath.Rel(extDir, path)
+			destPath := filepath.Join(legacyDir, relPath)
+			if info.IsDir() {
+				return os.MkdirAll(destPath, 0755)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+			return os.WriteFile(destPath, data, 0644)
+		})
+	}
+
 	return nil
+}
+
+// CleanLegacyNativeHost removes the old ai-usage native messaging manifest
+func CleanLegacyNativeHost() {
+	profilePath, variant := DetectChrome()
+	if variant == "" || profilePath == "" {
+		return
+	}
+	nativeDir := GetNativeMessagingHostDir(profilePath)
+	oldManifest := filepath.Join(nativeDir, "com.ai_usage.live_feed.json")
+	if _, err := os.Stat(oldManifest); err == nil {
+		_ = os.Remove(oldManifest)
+	}
 }
 
 // SetupNativeHost creates the native messaging host manifest for Chrome

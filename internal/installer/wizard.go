@@ -250,6 +250,7 @@ func buildInstallSteps(sel WizardSelections) []installStep {
 		steps = append(steps, installStep{
 			label: "Setting up native messaging host",
 			fn: func() error {
+				CleanLegacyNativeHost()
 				return SetupNativeHost(sel.ChromeProfile, "")
 			},
 		})

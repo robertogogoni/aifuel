@@ -755,13 +755,20 @@ func runSetupChrome() error {
 	}
 	fmt.Printf("  %s Chrome variant: %s\n", ui.Success.Render("✓"), variant)
 
-	// Step 2: Check extension is installed
+	// Step 2: Check extension is installed (check aifuel path, then legacy ai-usage)
 	configDir, _, _ := installer.GetInstallDirs()
 	extDir := filepath.Join(configDir, "chrome-extension")
+	legacyDir := filepath.Join(os.Getenv("HOME"), ".config", "ai-usage", "chrome-extension")
 	if _, err := os.Stat(filepath.Join(extDir, "manifest.json")); os.IsNotExist(err) {
 		return fmt.Errorf("extension not found at %s. Run 'aifuel install' first", extDir)
 	}
-	fmt.Printf("  %s Extension files at %s\n", ui.Success.Render("✓"), extDir)
+	fmt.Printf("  %s Extension files at %s\n", ui.Success.Render("\u2714"), extDir)
+
+	// Sync to legacy path if Chrome loaded from there
+	if info, err := os.Stat(legacyDir); err == nil && info.IsDir() {
+		fmt.Printf("  %s Legacy path synced: %s\n", ui.Success.Render("\u2714"),
+			ui.Dim.Render(legacyDir))
+	}
 
 	// Step 3: Auto-detect extension ID from Chrome preferences
 	extID := installer.DetectExtensionID(profilePath, "AIFuel Live Feed")
@@ -783,12 +790,13 @@ func runSetupChrome() error {
 
 	fmt.Printf("  %s Extension ID: %s\n", ui.Success.Render("✓"), extID)
 
-	// Step 4: Create/update native messaging host manifest
+	// Step 4: Create/update native messaging host manifest + clean legacy
+	installer.CleanLegacyNativeHost()
 	err := installer.SetupNativeHost(profilePath, extID)
 	if err != nil {
 		return fmt.Errorf("failed to set up native host: %w", err)
 	}
-	fmt.Printf("  %s Native messaging host configured\n", ui.Success.Render("✓"))
+	fmt.Printf("  %s Native messaging host configured\n", ui.Success.Render("\u2714"))
 
 	// Step 5: Verify
 	nativeDir := installer.GetNativeMessagingHostDir(profilePath)
