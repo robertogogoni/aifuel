@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -18,7 +19,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version = "1.5.0"
+// version is set at build time by GoReleaser via:
+//
+//	-ldflags "-X main.version={{.Version}}"
+//
+// When built with `go install ...@latest`, Go embeds the module version
+// in runtime/debug.BuildInfo, which we read as fallback. The "dev" default
+// only appears for bare `go build` in a local checkout with no tags.
+var version = "dev"
+
+func init() {
+	if version != "dev" {
+		return // ldflags already set it
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		v := strings.TrimPrefix(info.Main.Version, "v")
+		// Clean pseudo-versions: v1.5.1-0.20260403... -> 1.5.0+dev
+		if idx := strings.Index(v, "-0."); idx > 0 {
+			v = v[:idx] + "+dev"
+		}
+		version = v
+	}
+}
 
 // Flags
 var (
