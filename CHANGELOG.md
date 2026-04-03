@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-04-03
+
+### Added
+
+- **Chrome extension popup UI**: Click the toolbar icon to see 5-hour and 7-day usage bars, cost stats, reset countdowns, and per-model concurrency limits in a Catppuccin-themed popup. Replaces the invisible background-only extension.
+- **Toolbar badge**: Extension icon shows current 5-hour usage percentage with color-coded background (green/yellow/red at thresholds). Updates every poll cycle.
+- **Browser notifications**: Desktop alerts when usage hits configurable warning (80%) and critical (95%) thresholds, with cooldown to prevent spam.
+- **Extension options page**: Adjust poll interval (1/2/5/10 min), toggle badge visibility, enable/disable notifications, and set warning/critical thresholds from the extension settings.
+- **Masked admin key input**: `aifuel admin setup` now uses a huh password-masked input field with real-time validation, a spinner during key verification, and a feature preview showing what the Admin API unlocks.
+- **Interactive home menu**: Running `aifuel` when already installed shows a feature menu (status, dashboard, auth, config, admin, chrome, diagnostics, reinstall) instead of re-running the install wizard.
+- **Native bubbletea dashboard** (`aifuel dashboard`): Real-time TUI with 4 tabbed views (Rate Limits, Cost & Usage, Analytics, Account), auto-refresh every 30 seconds, keyboard navigation (tab/h/l to switch, r to refresh, q to quit), alt-screen mode, and mouse support. Integrates live feed data, admin API cost reports, analytics, and account metadata.
+- **Dashboard legacy mode**: `aifuel dashboard --legacy` runs the original shell-based dashboard for environments without bubbletea support.
+
+### Changed
+
+- Root command now detects existing installation and shows the interactive home menu instead of the install wizard.
+- Dashboard command defaults to native bubbletea TUI (previously shelled out to dashboard.sh).
+
 ## [1.4.0] - 2026-04-03
 
 ### Added
@@ -127,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Light/dark theme auto-detection
 - Log rotation and structured logging
 
+[1.5.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.5.0
 [1.4.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.4.0
 [1.3.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.3.0
 [1.2.1]: https://github.com/robertogogoni/aifuel/releases/tag/v1.2.1

@@ -1,18 +1,27 @@
 {
   "manifest_version": 3,
   "name": "AIFuel Live Feed",
-  "version": "1.3.0",
-  "description": "Fetches AI provider usage data and sends it to the AIFuel native host for real-time waybar display.",
+  "version": "1.5.0",
+  "description": "Real-time AI usage monitor. Shows rate limits, cost tracking, and reset countdowns for Claude and other providers.",
   "permissions": [
     "cookies",
     "nativeMessaging",
     "alarms",
-    "storage"
+    "storage",
+    "notifications"
   ],
   "host_permissions": [
     "https://claude.ai/*"
   ],
   "background": {
     "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AIFuel Usage Monitor"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
   }
 }

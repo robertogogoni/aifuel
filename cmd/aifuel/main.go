@@ -9,13 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/huh/spinner"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/robertogogoni/aifuel/internal/dashboard"
 	"github.com/robertogogoni/aifuel/internal/installer"
 	"github.com/robertogogoni/aifuel/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-var version = "1.4.0"
+var version = "1.5.0"
 
 // Flags
 var (
@@ -70,7 +73,11 @@ func main() {
 					"waybar status bar. Beautiful TUI installer, systemd integration, and\n"+
 					"optional Chrome extension for real-time tracking."),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Default action: run the install wizard
+			// If already installed, show feature menu; otherwise run wizard
+			_, _, libDir := installer.GetInstallDirs()
+			if _, err := os.Stat(filepath.Join(libDir, "aifuel.sh")); err == nil {
+				return runHome()
+			}
 			return installer.RunWizard()
 		},
 		SilenceUsage:  true,
@@ -98,14 +105,19 @@ func main() {
 	}
 
 	// ── dashboard ────────────────────────────────────────────────────────
+	var legacyDash bool
 	dashboardCmd := &cobra.Command{
 		Use:   "dashboard",
-		Short: "Open the TUI dashboard",
-		Long:  "Launch the interactive terminal dashboard showing real-time AI usage across all configured providers.",
+		Short: "Open the real-time TUI dashboard",
+		Long:  "Launch the interactive Bubble Tea dashboard with tabbed views, auto-refresh,\nand keyboard navigation. Use --legacy for the shell-based dashboard.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runScript("dashboard.sh")
+			if legacyDash {
+				return runScript("dashboard.sh")
+			}
+			return dashboard.Run()
 		},
 	}
+	dashboardCmd.Flags().BoolVar(&legacyDash, "legacy", false, "Use the shell-based dashboard instead")
 
 	// ── status ───────────────────────────────────────────────────────────
 	statusCmd := &cobra.Command{
@@ -880,6 +892,66 @@ func runAuth(args []string) error {
 	return nil
 }
 
+// ── Home / Feature Menu ─────────────────────────────────────────────────────
+
+func runHome() error {
+	fmt.Print(ui.RenderRichLogo())
+
+	var choice string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("What would you like to do?").
+				Options(
+					huh.NewOption("View usage status (dashboard)", "status"),
+					huh.NewOption("Open TUI dashboard", "dashboard"),
+					huh.NewOption("Check authentication status", "auth"),
+					huh.NewOption("Edit configuration", "config"),
+					huh.NewOption("Admin API (cost, usage, analytics)", "admin"),
+					huh.NewOption("Setup Chrome extension", "chrome"),
+					huh.NewOption("Run diagnostics", "check"),
+					huh.NewOption("Reinstall / update", "install"),
+					huh.NewOption("Exit", "exit"),
+				).
+				Value(&choice),
+		),
+	).WithTheme(huh.ThemeCatppuccin())
+
+	if err := form.Run(); err != nil {
+		return nil
+	}
+
+	switch choice {
+	case "status":
+		return runStatusFull()
+	case "dashboard":
+		return dashboard.Run()
+	case "auth":
+		return runAuth(nil)
+	case "config":
+		return installer.RunConfig()
+	case "admin":
+		// Show admin subcommand help
+		fmt.Printf("\n  %s\n\n", ui.Subtitle.Render("Admin API Commands"))
+		fmt.Printf("  %s  Show cost report (last 7 days)\n", ui.Code.Render("aifuel admin cost"))
+		fmt.Printf("  %s  Token usage by model\n", ui.Code.Render("aifuel admin usage"))
+		fmt.Printf("  %s  Claude Code metrics\n", ui.Code.Render("aifuel admin analytics"))
+		fmt.Printf("  %s  Configure Admin API key\n\n", ui.Code.Render("aifuel admin setup"))
+		// If key exists, offer to run cost report
+		if installer.GetAdminKey() != "" {
+			return runAdminCost()
+		}
+		return runAdminSetup()
+	case "chrome":
+		return runSetupChrome()
+	case "check":
+		return runScript("aifuel-check.sh")
+	case "install":
+		return installer.RunWizard()
+	}
+	return nil
+}
+
 // ── Admin API handlers ──────────────────────────────────────────────────────
 
 func requireAdmin() *installer.AdminClient {
@@ -901,9 +973,16 @@ func runAdminSetup() error {
 	header := lipgloss.NewStyle().Bold(true).Foreground(ui.Mauve)
 
 	fmt.Printf("\n%s %s\n\n", fuel, header.Render("Admin API Setup"))
-	fmt.Printf("  Provision an Admin API key at:\n")
+
+	// Show what the admin key unlocks
+	fmt.Printf("  The Admin API key unlocks:\n\n")
+	fmt.Printf("  %s %s  Official USD cost reports\n", ui.CheckMark, lipgloss.NewStyle().Foreground(ui.Yellow).Render("$"))
+	fmt.Printf("  %s %s  Token usage by model (1min granularity)\n", ui.CheckMark, lipgloss.NewStyle().Foreground(ui.Blue).Render("\u25b0"))
+	fmt.Printf("  %s %s  Claude Code productivity metrics\n", ui.CheckMark, lipgloss.NewStyle().Foreground(ui.Green).Render("\u2714"))
+	fmt.Printf("  %s %s  Workspace and member management\n\n", ui.CheckMark, lipgloss.NewStyle().Foreground(ui.Mauve).Render("\u2605"))
+
+	fmt.Printf("  Provision one at:\n")
 	fmt.Printf("  %s\n\n", ui.Code.Render("https://console.anthropic.com/settings/admin-keys"))
-	fmt.Printf("  The key starts with %s\n\n", ui.Code.Render("sk-ant-admin..."))
 
 	// Check if already configured
 	existing := installer.GetAdminKey()
@@ -912,35 +991,67 @@ func runAdminSetup() error {
 			ui.CheckMark, existing[:min(len(existing), 20)])
 	}
 
-	fmt.Printf("  Paste your Admin API key (or press Enter to skip): ")
+	// Masked input via huh
 	var key string
-	fmt.Scanln(&key)
-	key = strings.TrimSpace(key)
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Admin API Key").
+				Description("Starts with sk-ant-admin... (leave empty to skip)").
+				EchoMode(huh.EchoModePassword).
+				Placeholder("sk-ant-admin...").
+				Validate(func(s string) error {
+					if s == "" {
+						return nil // allow skip
+					}
+					if !strings.HasPrefix(s, "sk-ant-admin") {
+						return fmt.Errorf("key must start with sk-ant-admin")
+					}
+					return nil
+				}).
+				Value(&key),
+		),
+	).WithTheme(huh.ThemeCatppuccin())
 
+	if err := form.Run(); err != nil {
+		return fmt.Errorf("setup cancelled: %w", err)
+	}
+
+	key = strings.TrimSpace(key)
 	if key == "" {
 		fmt.Printf("\n  %s\n\n", ui.Dim.Render("Skipped. You can also set ANTHROPIC_ADMIN_KEY in your environment."))
 		return nil
 	}
 
-	if !strings.HasPrefix(key, "sk-ant-admin") {
-		return fmt.Errorf("invalid key format: expected sk-ant-admin... prefix")
-	}
+	// Verify the key with a spinner
+	var org *installer.OrgInfo
+	var verifyErr error
 
-	// Verify the key works
-	client := &installer.AdminClient{Key: key, Version: "2023-06-01"}
-	org, err := client.GetOrgInfo()
+	err := spinner.New().
+		Title("Verifying key...").
+		Style(lipgloss.NewStyle().Foreground(ui.Mauve)).
+		Action(func() {
+			client := &installer.AdminClient{Key: key, Version: "2023-06-01"}
+			org, verifyErr = client.GetOrgInfo()
+		}).
+		Run()
+
 	if err != nil {
-		return fmt.Errorf("key verification failed: %w", err)
+		return fmt.Errorf("spinner error: %w", err)
+	}
+	if verifyErr != nil {
+		return fmt.Errorf("key verification failed: %w", verifyErr)
 	}
 
 	fmt.Printf("\n  %s Verified: %s\n", ui.CheckMark,
-		lipgloss.NewStyle().Foreground(ui.Peach).Render(org.Name))
+		lipgloss.NewStyle().Foreground(ui.Peach).Bold(true).Render(org.Name))
 
 	if err := installer.SaveAdminKey(key); err != nil {
 		return fmt.Errorf("failed to save key: %w", err)
 	}
 
 	fmt.Printf("  %s Saved to config (permissions: 0600)\n\n", ui.CheckMark)
+	fmt.Printf("  Try it: %s\n\n", ui.Code.Render("aifuel admin cost"))
 	return nil
 }
 

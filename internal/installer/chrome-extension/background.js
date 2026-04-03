@@ -1,9 +1,23 @@
 // AIFuel Live Feed — Chrome Extension Background Service Worker
-// Fetches Claude usage every 2 minutes and sends to native host for file output.
+// Fetches Claude usage, updates badge, sends to native host, and triggers notifications.
 
-const POLL_INTERVAL_MIN = 2;
+const DEFAULT_POLL_MIN = 2;
 const NATIVE_HOST = "com.aifuel.live_feed";
 const USAGE_API = "https://claude.ai/api/organizations";
+
+// Load user settings (poll interval, thresholds, badge toggle)
+async function getSettings() {
+  const stored = await chrome.storage.local.get(["settings"]);
+  return {
+    pollInterval: 2,
+    showBadge: true,
+    notifications: true,
+    warnThreshold: 80,
+    critThreshold: 95,
+    notifyCooldown: 15,
+    ...(stored.settings || {})
+  };
+}
 
 // Get the org ID from cookies
 async function getOrgId() {
@@ -159,6 +173,67 @@ function sendToNativeHost(data) {
   }
 }
 
+// Update toolbar badge with current usage percentage
+async function updateBadge(data) {
+  const settings = await getSettings();
+  if (!settings.showBadge || !data?.five_hour) {
+    chrome.action.setBadgeText({ text: "" });
+    return;
+  }
+
+  const pct = Math.round(data.five_hour.utilization || 0);
+  chrome.action.setBadgeText({ text: pct + "%" });
+
+  let color = "#a6e3a1"; // green
+  if (pct >= 85) color = "#f38ba8"; // red
+  else if (pct >= 60) color = "#f9e2af"; // yellow
+
+  chrome.action.setBadgeBackgroundColor({ color });
+  chrome.action.setBadgeTextColor({ color: "#1e1e2e" });
+}
+
+// Send desktop notification when approaching limits
+async function checkNotifications(data) {
+  const settings = await getSettings();
+  if (!settings.notifications || !data?.five_hour) return;
+
+  const pct = data.five_hour.utilization || 0;
+  const cooldownMs = settings.notifyCooldown * 60 * 1000;
+
+  const stored = await chrome.storage.local.get(["lastNotifyTime", "lastNotifyLevel"]);
+  const now = Date.now();
+  const lastTime = stored.lastNotifyTime || 0;
+  const lastLevel = stored.lastNotifyLevel || "";
+
+  if (now - lastTime < cooldownMs) return;
+
+  let level = "";
+  let title = "";
+  let message = "";
+
+  if (pct >= settings.critThreshold) {
+    level = "critical";
+    title = "AIFuel: Critical Usage";
+    message = `5-hour limit at ${Math.round(pct)}%. Consider pausing to let it reset.`;
+  } else if (pct >= settings.warnThreshold) {
+    level = "warning";
+    title = "AIFuel: High Usage";
+    message = `5-hour limit at ${Math.round(pct)}%. Approaching rate limit.`;
+  }
+
+  if (level && level !== lastLevel) {
+    chrome.notifications.create("aifuel-" + level, {
+      type: "basic",
+      title: title,
+      message: message,
+      iconUrl: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">⛽</text></svg>'),
+      priority: level === "critical" ? 2 : 1
+    });
+    await chrome.storage.local.set({ lastNotifyTime: now, lastNotifyLevel: level });
+    console.log(`[aifuel] Sent ${level} notification at ${Math.round(pct)}%`);
+  }
+}
+
 // Main poll function
 async function pollUsage() {
   const data = await fetchUsage();
@@ -167,12 +242,21 @@ async function pollUsage() {
     const [orgInfo, rateLimits] = await Promise.all([fetchOrgInfo(), fetchRateLimits()]);
     if (orgInfo) data._org = orgInfo;
     if (rateLimits) data._rate_limits = rateLimits;
+
     sendToNativeHost(data);
+    updateBadge(data);
+    checkNotifications(data);
   }
 }
 
-// Set up periodic polling via chrome.alarms
-chrome.alarms.create("poll-usage", { periodInMinutes: POLL_INTERVAL_MIN });
+// Set up periodic polling (reads user-configured interval)
+async function setupAlarm() {
+  const settings = await getSettings();
+  chrome.alarms.clear("poll-usage");
+  chrome.alarms.create("poll-usage", { periodInMinutes: settings.pollInterval });
+  console.log(`[aifuel] Polling every ${settings.pollInterval} min`);
+}
+
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "poll-usage") {
     pollUsage();
@@ -182,12 +266,15 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // Also poll on extension install/startup
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[aifuel] Extension installed, starting live feed");
+  setupAlarm();
   pollUsage();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  setupAlarm();
   pollUsage();
 });
 
 // Initial poll
+setupAlarm();
 pollUsage();

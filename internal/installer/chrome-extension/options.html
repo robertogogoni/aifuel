@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --base: #1e1e2e;
+      --mantle: #181825;
+      --surface0: #313244;
+      --surface1: #45475a;
+      --overlay0: #6c7086;
+      --text: #cdd6f4;
+      --subtext0: #a6adc8;
+      --peach: #fab387;
+      --green: #a6e3a1;
+      --mauve: #cba6f7;
+      --blue: #89b4fa;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 380px;
+      background: var(--base);
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      padding: 20px;
+    }
+
+    h2 {
+      color: var(--peach);
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .setting {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      color: var(--subtext0);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    select, input[type="number"] {
+      background: var(--surface0);
+      color: var(--text);
+      border: 1px solid var(--surface1);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      width: 100%;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--mauve);
+    }
+
+    .toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+
+    .toggle-label { color: var(--text); font-size: 12px; }
+
+    .switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--surface0);
+      border-radius: 10px;
+      transition: 0.3s;
+    }
+
+    .slider::before {
+      content: "";
+      position: absolute;
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background: var(--overlay0);
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .slider { background: var(--green); }
+    input:checked + .slider::before {
+      transform: translateX(16px);
+      background: var(--base);
+    }
+
+    .saved {
+      color: var(--green);
+      font-size: 11px;
+      opacity: 0;
+      transition: opacity 0.3s;
+      margin-top: 12px;
+    }
+
+    .saved.show { opacity: 1; }
+
+    .section {
+      border-top: 1px solid var(--surface0);
+      margin-top: 14px;
+      padding-top: 14px;
+    }
+
+    .hint {
+      color: var(--overlay0);
+      font-size: 10px;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h2>&#9981; AIFuel Settings</h2>
+
+  <div class="setting">
+    <label>Poll Interval</label>
+    <select id="pollInterval">
+      <option value="1">Every 1 minute</option>
+      <option value="2" selected>Every 2 minutes (default)</option>
+      <option value="5">Every 5 minutes</option>
+      <option value="10">Every 10 minutes</option>
+    </select>
+    <div class="hint">How often to fetch usage data from claude.ai</div>
+  </div>
+
+  <div class="section">
+    <div class="toggle">
+      <span class="toggle-label">Show badge with usage %</span>
+      <label class="switch">
+        <input type="checkbox" id="showBadge" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle">
+      <span class="toggle-label">Desktop notifications at thresholds</span>
+      <label class="switch">
+        <input type="checkbox" id="notifications" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="setting">
+      <label>Warning threshold (%)</label>
+      <input type="number" id="warnThreshold" value="80" min="10" max="99">
+    </div>
+    <div class="setting">
+      <label>Critical threshold (%)</label>
+      <input type="number" id="critThreshold" value="95" min="50" max="100">
+    </div>
+    <div class="setting">
+      <label>Notification cooldown (minutes)</label>
+      <input type="number" id="notifyCooldown" value="15" min="1" max="120">
+    </div>
+  </div>
+
+  <div class="saved" id="saved">Settings saved</div>
+
+  <script src="options.js"></script>
+</body>
+</html>
