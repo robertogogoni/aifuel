@@ -1,6 +1,7 @@
 <p align="center">
   <br>
   <img src="https://img.shields.io/badge/%E2%9B%BD-aifuel-fab387?style=for-the-badge&labelColor=1e1e2e" alt="aifuel" />
+  [![Downloads](https://img.shields.io/github/downloads/robertogogoni/aifuel/total?style=flat-square&color=a6e3a1&label=downloads)](https://github.com/robertogogoni/aifuel/releases)
   <br><br>
   <strong>Real-time AI provider usage monitor for waybar</strong>
   <br>
