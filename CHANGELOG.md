@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-04-03
+
+### Added
+
+- **Install wizard authentication page**: After install steps complete, a new page shows auth status for each selected provider (with credential paths for already-authenticated ones) and offers to run auth flows inline. Supports Claude, Codex, Gemini, and Copilot. Chrome extension section reminds users that cookies are automatic. Users can skip and run `aifuel auth` later.
+- **Legacy extension path migration**: `InstallChromeExtension()` now deploys to both `~/.config/aifuel/chrome-extension/` and `~/.config/ai-usage/chrome-extension/` if the legacy directory exists, so Chrome picks up changes on reload regardless of which path it loaded from.
+- **Legacy native host cleanup**: `CleanLegacyNativeHost()` removes the stale `com.ai_usage.live_feed.json` manifest. Called during both `aifuel install` and `aifuel setup-chrome`.
+- **Extension ID detection for legacy paths**: `DetectExtensionID()` now matches extensions loaded from both `/aifuel/chrome-extension` and `/ai-usage/chrome-extension` paths.
+
+### Changed
+
+- Install wizard success banner reordered: waybar config first, then restart waybar, then diagnostics, dashboard, and admin setup.
+- `setup-chrome` command now reports legacy path sync status and cleans old native host manifests.
+- README: Getting Started simplified (wizard handles auth now), What's New table covers v1.3.0 through v1.7.0, Chrome Extension section expanded with full feature table, CLI Reference includes admin and dashboard flags.
+
 ## [1.6.0] - 2026-04-03
 
 ### Added
@@ -163,6 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Light/dark theme auto-detection
 - Log rotation and structured logging
 
+[1.7.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.7.0
 [1.6.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.6.0
 [1.5.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.5.0
 [1.4.0]: https://github.com/robertogogoni/aifuel/releases/tag/v1.4.0

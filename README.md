@@ -37,18 +37,20 @@ aifuel is a Go CLI that monitors your AI provider usage and renders it as a colo
 
 **Claude Code Integration** :link: Compact statusLine output shows `5h:16% 7d:3% $21.59 359msg` right in your terminal.
 
-## What's New in v1.3.0
+## What's New
 
-| Feature | Description |
-|---------|-------------|
-| **Pixel-art fuel pump** | 8-line ASCII art with Catppuccin warm-to-shadow gradient, displayed on `aifuel version` |
-| **Themed Cobra help** | All `--help` output uses Catppuccin colors (Mauve headers, Peach commands, dimmed hints) |
-| **`aifuel status --full`** | Rich dashboard with progress bars, model breakdown, extra usage credits, and account info |
-| **`aifuel config`** | Interactive [huh](https://github.com/charmbracelet/huh) form editor for live config changes |
-| **`aifuel completion`** | Native shell completions for bash, zsh, and fish via Cobra |
-| **5 new API fields** | `seven_day_opus`, `seven_day_oauth_apps`, `seven_day_cowork`, `extra_usage_monthly_limit`, `extra_usage_utilization` |
-| **Account endpoint** | `/api/organizations/{org}` provides real `rate_limit_tier`, `billing_type`, capabilities, and available models |
-| **Chrome org fetch** | `background.js` now fetches org metadata every 30 minutes alongside usage data |
+| Version | Feature | Description |
+|---------|---------|-------------|
+| **v1.7.0** | **Wizard auth page** | Install wizard authenticates providers inline (no separate `aifuel auth` step). One command from zero to working. |
+| **v1.7.0** | **Legacy path migration** | Extension auto-deploys to both aifuel and legacy ai-usage paths. Old native host manifests cleaned up. |
+| **v1.6.0** | **Live conversation cost** | Content script on claude.ai tracks streaming tokens and shows floating cost widget + per-message badges |
+| **v1.6.0** | **Tabbed popup** | Three tabs: Usage (limits, sparkline), Chats (searchable conversations), Estimate (token calculator) |
+| **v1.6.0** | **Context menu** | Right-click selected text, "Ask Claude about this" |
+| **v1.5.0** | **Bubbletea dashboard** | Native Go TUI with 4 tabs, auto-refresh, keyboard nav |
+| **v1.5.0** | **Chrome popup + badge** | Toolbar icon with live usage %, Catppuccin popup, browser notifications |
+| **v1.4.0** | **Admin API** | `aifuel admin cost/usage/analytics` with official Anthropic billing data |
+| **v1.4.0** | **Per-model limits** | Concurrency slots and thinking RPM per model group |
+| **v1.3.0** | **Rich TUI** | Pixel-art logo, themed help, `status --full`, `config` editor, shell completions |
 
 ## Quick Install
 
@@ -85,15 +87,15 @@ aifuel install
 
 ## Getting Started
 
-**1. Install aifuel** using any method above. The `aifuel install` wizard handles everything interactively.
+**1. Install aifuel** using any method above. The `aifuel install` wizard handles everything:
 
-**2. Authenticate with Claude** (or your provider of choice):
+- Detects your system (waybar, jq, curl, Chrome, ccusage)
+- Lets you choose providers and configure display settings
+- Installs scripts, systemd service, and Chrome extension
+- Authenticates each provider inline (Claude, Codex, Gemini, Copilot)
+- Prints the waybar config snippet to copy
 
-```bash
-aifuel auth claude
-```
-
-**3. Add the waybar module** to `~/.config/waybar/config.jsonc`:
+**2. Add the waybar module** to `~/.config/waybar/config.jsonc`:
 
 ```jsonc
 // Add "custom/aifuel" to your "modules-right" (or wherever you prefer)
@@ -109,22 +111,26 @@ aifuel auth claude
 }
 ```
 
-**4. Add the CSS styles** from [`waybar/style.css`](waybar/style.css) to your `~/.config/waybar/style.css`.
+**3. Reload waybar.** Your fuel gauge should appear within 30 seconds.
 
-**5. Reload waybar.** Your fuel gauge should appear within 30 seconds.
-
-**6. (Optional) Install the Chrome extension** for fastest real-time data:
+**4. (Optional) Set up the Chrome extension** for real-time data and the popup UI:
 
 ```bash
 aifuel setup-chrome
+```
+
+**5. (Optional) Enable Admin API** for official cost and usage reports:
+
+```bash
+aifuel admin setup
 ```
 
 ## CLI Reference
 
 | Command | Description |
 |---------|-------------|
-| `aifuel` | Run the interactive install wizard (default action) |
-| `aifuel install` | Launch the TUI installation wizard |
+| `aifuel` | Feature menu (if installed) or install wizard (if not) |
+| `aifuel install` | Full TUI wizard: detect, configure, install, authenticate |
 | `aifuel config` | Interactive config editor with live form fields |
 | `aifuel status` | One-line styled usage summary |
 | `aifuel status --full` | Rich dashboard with progress bars, model breakdown, account info |
@@ -133,8 +139,13 @@ aifuel setup-chrome
 | `aifuel auth` | Show auth status for all providers |
 | `aifuel auth <provider>` | Authenticate with a specific provider |
 | `aifuel check` | Run diagnostics (dependencies, credentials, network) |
-| `aifuel dashboard` | Launch the full-screen TUI dashboard |
-| `aifuel setup-chrome` | Configure Chrome extension and native messaging host |
+| `aifuel dashboard` | Real-time bubbletea TUI with tabbed views and auto-refresh |
+| `aifuel dashboard --legacy` | Shell-based dashboard (original) |
+| `aifuel admin setup` | Store Anthropic Admin API key with masked input |
+| `aifuel admin cost` | Official USD cost report (last 7 days) |
+| `aifuel admin usage` | Token usage by model from Admin API |
+| `aifuel admin analytics` | Claude Code productivity metrics (sessions, LOC, commits) |
+| `aifuel setup-chrome` | Configure Chrome extension, native host, clean legacy paths |
 | `aifuel completion bash\|zsh\|fish` | Generate shell completion scripts |
 | `aifuel uninstall` | Clean removal with config preservation option |
 | `aifuel version` | Display pixel-art logo with version info |
@@ -352,26 +363,38 @@ aifuel completion fish > ~/.config/fish/completions/aifuel.fish
 
 ## Chrome Extension
 
-The bundled Chrome extension provides the fastest data path (Phase 1 in the cascade). It polls `claude.ai/api/organizations/{org}/usage` every 2 minutes and pushes results to aifuel via Chrome native messaging.
+The bundled Chrome extension provides the fastest data path (Phase 1 in the cascade) and browser-exclusive features that the CLI cannot offer.
 
-As of v1.3.0, it also fetches org metadata (`rate_limit_tier`, `billing_type`, capabilities, models) every 30 minutes.
+### What it does
+
+| Feature | Description |
+|---------|-------------|
+| **Usage polling** | Fetches rate limits every 2 min, org metadata and per-model limits every 30 min |
+| **Toolbar badge** | Live 5-hour usage % with color-coded background (green/yellow/red) |
+| **Popup (Usage tab)** | Rate limit bars, 24h sparkline chart, current conversation cost |
+| **Popup (Chats tab)** | Searchable list of all claude.ai conversations, click to open |
+| **Popup (Estimate tab)** | Paste text to estimate token count and cost for Opus/Sonnet |
+| **Conversation cost** | Content script on claude.ai shows floating cost widget and per-message badges |
+| **Context menu** | Right-click selected text on any page, "Ask Claude about this" |
+| **Notifications** | Desktop alerts at configurable warning (80%) and critical (95%) thresholds |
+| **Options page** | Poll interval, badge toggle, notification settings |
+| **Native messaging** | Sends enriched data to waybar via `com.aifuel.live_feed` host |
 
 ### Setup
 
 ```bash
 # 1. Load the extension in Chrome
-#    - Open chrome://extensions
-#    - Enable "Developer mode"
-#    - Click "Load unpacked" and select ~/.config/aifuel/chrome-extension/
+#    Open chrome://extensions, enable "Developer mode",
+#    click "Load unpacked" and select ~/.config/aifuel/chrome-extension/
 
 # 2. Configure native messaging
 aifuel setup-chrome
 
-# 3. Make sure you're logged into claude.ai
+# 3. Log into claude.ai
 #    Data flows to waybar within 2 minutes.
 ```
 
-The extension works with Chrome, Chrome Canary, Chromium, and Brave.
+Works with Chrome, Chrome Canary, Chromium, and Brave. The install wizard handles the Chrome extension setup if you select it during installation.
 
 ## Testing
 
